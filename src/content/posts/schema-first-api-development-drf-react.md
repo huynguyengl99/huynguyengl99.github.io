@@ -98,6 +98,30 @@ Two gotchas worth calling out:
 - **Name enum-ish fields by concept, not just `status`/`type`/`role`.** Generic names collide in the component registry; `task_status` generates a component that stays unique and self-describing.
 - **Polymorphic types need required discriminators.** If you use discriminated unions (e.g. message subtypes), add a postprocessing hook that forces the discriminator field to `required` — otherwise the generated zod schemas mark it optional and validation falls apart.
 
+### Serializer patterns that come up constantly
+
+A few recurring shapes once you commit to "the schema must be exactly right":
+
+**Nested read, flat write.** The UI wants the full related object when reading, but should send only an ID when writing. A small custom related field expresses this once, and the schema shows both shapes correctly (this is also exactly what `COMPONENT_SPLIT_REQUEST` exists for):
+
+```python
+class ProjectSerializer(ModelSerializer[Project]):
+    owner = NestedReadFlatWriteField(serializer=UserSummarySerializer)
+    # read:  {"owner": {"id": 7, "name": "..."}}
+    # write: {"owner": 7}
+```
+
+**Defaults must be declared on the serializer.** Model-level defaults don't automatically reach the OpenAPI schema. Declaring them via `extra_kwargs` (or explicit serializer fields) exports them into the contract, and the frontend picks them up as `ZodDefault` — which auto-forms then use to prefill fields:
+
+```python
+class Meta:
+    model = Task
+    fields = ["id", "title", "priority"]
+    extra_kwargs = {"priority": {"default": Priority.MEDIUM}}
+```
+
+**A lightweight schema variant.** All those `help_text` descriptions are great for API docs but dead weight in a client bundle. Serving a second schema endpoint with descriptions stripped (a tiny `AutoSchema` subclass) and generating the client from that cut our generated-code size dramatically, while the full-fat schema stays available for the docs UI.
+
 ### Backend typing: mypy + pyright
 
 We run **both** mypy (strict) and pyright on the backend:
@@ -161,7 +185,30 @@ This is my favorite part. Because the generated schemas are zod, they plug strai
 - maps field names through i18n for labels
 - takes small overrides (hide these fields, disable those) when the generic rendering isn't enough
 
+In practice it looks like this:
+
+```tsx
+<APIForm
+  schema={schemas.TaskRequest}     // generated zod schema
+  onSubmit={values => tasksApi.tasksCreate(values)}
+  hiddenFields={["workspace"]}     // small per-form overrides
+/>
+```
+
 The result: when the backend adds a field to a serializer, the frontend form **grows the field automatically** on the next regenerate. No manually synced form definitions, no forgotten validation rules — the serializer *is* the form definition.
+
+## The whole loop: adding one field
+
+To make this concrete, here's everything that happens when a feature needs a new `due_date` on tasks:
+
+1. **Model + migration** — add the field, `makemigrations`.
+2. **Serializer** — add `due_date` to `fields` (plus `extra_kwargs` if it has a default). This is the *only* contract-relevant edit in the entire feature.
+3. **Regenerate** — `pnpm gen:all` against the running dev server.
+4. **TypeScript speaks** — the generated `TaskRequest` schema now includes `dueDate`. Any code constructing task payloads without it (if required) fails to compile, at the exact call sites.
+5. **Forms update themselves** — the task form renders a date field on next reload, defaults prefilled, validation attached.
+6. **The diff tells the story** — the PR shows the serializer change *and* the regenerated client files. Reviewers see the contract change explicitly; nobody needs to announce it in a meeting.
+
+Total hand-written code: the model field and one serializer line. Everything else is derived — which is exactly why the contract can't drift.
 
 ## On learning to love types
 
