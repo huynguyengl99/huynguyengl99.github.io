@@ -21,6 +21,9 @@ import config from "./astro-paper.config";
 
 export default defineConfig({
   site: config.site.url,
+  server: {
+    port: 1299,
+  },
   integrations: [
     mdx(),
     sitemap({
