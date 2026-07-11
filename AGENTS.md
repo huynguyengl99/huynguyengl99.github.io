@@ -1,3 +1,7 @@
+## Git commits
+
+Never add `Co-Authored-By` trailers or any AI/Claude attribution to commit messages.
+
 ## Development
 
 When starting the dev server, use background mode:
