@@ -19,6 +19,8 @@ All queries follow each framework's best practices. This is a comparison of prop
 
 **TL;DR:** Performance differences collapse from **20x** (plain JSON) to **1.7x** (paginated queries) to **1.3x** (complex detail queries). Database I/O is the great equalizer — framework choice barely matters for database-heavy apps.
 
+![Benchmark results across all endpoints — the huge JSON gap flattens out once endpoints hit the database](./_images/benchmark_combined.png)
+
 Full results, code, and a reproducible Docker setup: [python-api-frameworks-benchmark](https://github.com/huynguyengl99/python-api-frameworks-benchmark)
 
 ## Table of contents
@@ -56,6 +58,8 @@ Full results, code, and a reproducible Docker setup: [python-api-frameworks-benc
 
 A 20x difference between fastest and slowest — this is the number most benchmarks stop at.
 
+![RPS for a 1KB JSON response, by framework and server](./_images/benchmark_json_1k.png)
+
 | Framework        | RPS    | Latency (avg) |
 | ---------------- | ------ | ------------- |
 | litestar-uvicorn | 31,745 | 0.00ms        |
@@ -73,6 +77,8 @@ A 20x difference between fastest and slowest — this is the number most benchma
 
 Add a real database query with nested relations and the gap shrinks to **1.7x**. Query optimization is now the bottleneck.
 
+![RPS for paginated articles with nested author and tags](./_images/benchmark_articlespage_1_page_size_20.png)
+
 | Framework        | RPS | Latency (avg) |
 | ---------------- | --- | ------------- |
 | litestar-uvicorn | 253 | 0.39ms        |
@@ -89,6 +95,8 @@ Add a real database query with nested relations and the gap shrinks to **1.7x**.
 ### 3. Article detail (`/articles/1`)
 
 Single article with all nested data (author + tags + comments): the gap narrows to **1.3x**. The frameworks are nearly indistinguishable.
+
+![RPS for a single article detail with all nested data](./_images/benchmark_articles1.png)
 
 | Framework        | RPS | Latency (avg) |
 | ---------------- | --- | ------------- |
@@ -119,6 +127,8 @@ Single article with all nested data (author + tags + comments): the gap narrows 
 | drf-uvicorn      | 1,582   | 1,440    | 642           | 178       | 285            |
 
 ## Resource usage
+
+![Memory and CPU usage per framework under load](./_images/benchmark_resources.png)
 
 **Memory:** most frameworks sat at 170–220MB. The outlier was DRF on Granian's WSGI mode at 640–670MB — a difference in protocol handling (WSGI vs ASGI), not a performance problem.
 
