@@ -26,4 +26,4 @@ Python and Django, realtime and WebSockets, API design and type safety, AI agent
 
 ## Get in touch
 
-Reach me at [ndhgl99@gmail.com](mailto:ndhgl99@gmail.com) or on [GitHub](https://github.com/huynguyengl99).
+Reach me at [ndhgl99@gmail.com](mailto:ndhgl99@gmail.com), or find me on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).
