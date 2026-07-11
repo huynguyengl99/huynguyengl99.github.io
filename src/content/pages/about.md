@@ -3,7 +3,7 @@ title: "About"
 description: "A bit about me and this blog."
 ---
 
-Hi, I'm Huy Nguyen — a full-stack software engineer building realtime and AI products end to end.
+Hi, I'm Huy Nguyen — a senior full-stack software engineer building realtime and AI products end to end.
 
 My day-to-day spans the whole stack: Python backends with Django/DRF and FastAPI, React + TypeScript frontends, and the cloud infrastructure underneath (GCP, Kubernetes, Terraform). I've spent a lot of that time on realtime systems — WebSocket messaging, streaming AI assistants, voice pipelines — and on designing LLM agent systems with the observability to keep them honest in production.
 
