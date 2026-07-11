@@ -1,7 +1,7 @@
 ---
 title: "Python API Framework Benchmark: FastAPI vs Django vs Litestar on Real Database Workloads"
 description: "I benchmarked the major Python web frameworks against real PostgreSQL workloads. The 20x performance gap you see in JSON benchmarks collapses to 1.3x once the database gets involved."
-pubDatetime: 2026-07-11T12:00:00+07:00
+pubDatetime: 2026-01-23T09:00:00+07:00
 featured: true
 tags:
   - python
