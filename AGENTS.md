@@ -2,6 +2,13 @@
 
 Never add `Co-Authored-By` trailers or any AI/Claude attribution to commit messages.
 
+## Writing style
+
+Applies to blog posts and social drafts written for the author.
+
+- No em-dashes (—). Rephrase, or use a short hyphen (-) if a dash is really needed.
+- Never end a post with a manufactured engagement hook, e.g. "Curious how others do X", "What's your take?", "I'd love to hear...". It reads as AI slop. Close by chatting like a person: hope it helps, and invite people to share their own tips if they have any.
+
 ## Development
 
 When starting the dev server, use background mode:
