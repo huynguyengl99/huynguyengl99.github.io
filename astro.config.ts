@@ -6,6 +6,7 @@ import {
 } from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
 import mdx from "@astrojs/mdx";
+import mermaid from "astro-mermaid";
 import sitemap from "@astrojs/sitemap";
 import { unified } from "@astrojs/markdown-remark";
 import remarkToc from "remark-toc";
@@ -25,6 +26,7 @@ export default defineConfig({
     port: 1299,
   },
   integrations: [
+    mermaid({ autoTheme: true }),
     mdx(),
     sitemap({
       filter: page =>
