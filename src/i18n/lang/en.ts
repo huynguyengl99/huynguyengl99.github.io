@@ -21,6 +21,8 @@ export default {
     editPage: "Edit page",
     previousPost: "Previous Post",
     nextPost: "Next Post",
+    seriesLabel: "Part of the series",
+    seriesProgress: "{{total}} parts published so far",
   },
   pagination: {
     prev: "Prev",

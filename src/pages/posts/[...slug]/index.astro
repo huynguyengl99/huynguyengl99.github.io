@@ -14,6 +14,7 @@ import ShareLinks from "./_components/ShareLinks.astro";
 import BackButton from "./_components/BackButton.astro";
 import BackToTopButton from "./_components/BackToTopButton.astro";
 import AdjacentPostNav from "./_components/AdjacentPostNav.astro";
+import SeriesNav from "./_components/SeriesNav.astro";
 import Comments from "@/components/Comments.astro";
 import config from "@/config";
 
@@ -70,6 +71,7 @@ const {
   timezone,
   tags,
   hideEditPost,
+  series,
 } = post.data;
 
 const { Content } = await render(post);
@@ -132,6 +134,8 @@ const ogImage = ogImageUrl
       </span>
       <EditPost {hideEditPost} {post} class="max-sm:hidden" />
     </div>
+
+    {series && <SeriesNav {series} currentId={post.id} />}
 
     <article
       id="article"
