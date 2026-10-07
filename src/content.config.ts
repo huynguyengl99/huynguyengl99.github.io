@@ -6,7 +6,19 @@ import config from "@/config";
 export const BLOG_PATH = "src/content/posts";
 
 const posts = defineCollection({
-  loader: glob({ pattern: "**/[^_]*.{md,mdx}", base: `./${BLOG_PATH}` }),
+  loader: glob({
+    pattern: "**/[^_]*.{md,mdx}",
+    base: `./${BLOG_PATH}`,
+    // A series is ordered on disk with a `NN-` prefix so the files read in
+    // reading order. The prefix is for the editor, not the reader, so it is
+    // stripped out of the id and never reaches a URL.
+    generateId: ({ entry }) =>
+      entry
+        .replace(/\.mdx?$/, "")
+        .split("/")
+        .map(segment => segment.replace(/^\d+[-_]/, ""))
+        .join("/"),
+  }),
   schema: ({ image }) =>
     z.object({
       author: z.string().default(config.site.author),
