@@ -1,6 +1,6 @@
 ---
 title: "Agent Graph Engineering, Part 1: The Stack, and Why Each Piece Is There"
-description: "The stack for building a typed, observable, controllable agent graph: Pydantic AI, LangGraph, chanx, Langfuse, pytest and evals. What each piece buys you, what it costs, the architecture we build across the series, and the full series map."
+description: "The stack for building a typed, observable, controllable agent graph: Pydantic AI, LangGraph, chanx, OpenTelemetry, pytest and evals. What each piece buys you, what it costs, the architecture we build across the series, and the full series map."
 pubDatetime: 2026-09-19T10:00:00+07:00
 featured: true
 tags:
@@ -14,7 +14,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 1
 ---
 
-> **TL;DR** The stack is Python, Pydantic AI for agents, LangGraph for the flow, [chanx](https://github.com/huynguyengl99/chanx) for typed streaming WebSockets and a generated frontend contract, Langfuse for tracing, pytest with a mocked LLM for fast tests, and real-model evals for regressions. Business logic stays in a separate service from the agent graph. The single idea holding it together: every boundary in the system is a declared, typed artifact rather than something you hold in your head. This post makes the case for each piece so you can bring it to your team, then lays out what we build in the rest of the series.
+> **TL;DR** The stack is Python, Pydantic AI for agents, LangGraph for the flow, [chanx](https://github.com/huynguyengl99/chanx) for typed streaming WebSockets and a generated frontend contract, OpenTelemetry into a trace store you own, pytest with a mocked LLM for fast tests, and real-model evals for regressions. Business logic stays in a separate service from the agent graph. The single idea holding it together: every boundary in the system is a declared, typed artifact rather than something you hold in your head. This post makes the case for each piece so you can bring it to your team, then lays out what we build in the rest of the series.
 
 [Part 0](/posts/agent-graph-engineering/before-it-had-a-name/) was the story: years of shipping LLM features as intent detection plus nested conditionals, and why observability tooling never fixed the underlying problem. This post is the pragmatic half.
 
@@ -52,7 +52,7 @@ The sentence that keeps turning up in hiring write-ups is that a demo agent is e
 | Agent          | Pydantic AI            | Typed tools, typed outputs, typed deps, provider independence                                      |
 | Flow           | LangGraph              | Declared graph, renderable diagram, inspectable state, checkpointing                               |
 | Transport      | chanx                  | Typed WebSocket messages, broadcast from anywhere, generated AsyncAPI contract                     |
-| Tracing        | Langfuse               | One connected trace per user message, in production                                                |
+| Tracing        | OpenTelemetry          | One connected trace per user message, readable with no account and exportable to any OTLP backend  |
 | Tests          | pytest + mocked LLM    | Fast, deterministic, no API spend                                                                  |
 | Regressions    | Evals with real models | Catch what mocks cannot when you change a model or a prompt                                        |
 | Business logic | A separate service     | Keeps your product's domain out of your agent's graph                                              |
@@ -105,11 +105,17 @@ Three things it does for an agent system:
 
 It works with Django, FastAPI, or Litestar, which matters because we use two of them.
 
-### Langfuse, for tracing
+### OpenTelemetry, into a trace store you own
 
-Or Logfire, or Langsmith. The point is not the vendor, it is that both LangGraph and Pydantic AI instrument themselves, so you get one connected trace covering graph transitions and model calls together rather than a flat list of completions.
+The usual advice here is to name a vendor. I would rather name the standard, because the vendor is the part you should be able to change.
 
-When a user reports that the agent did something strange in production, you want evidence, not a reproduction attempt. This is the piece that gives you evidence.
+Both LangGraph and Pydantic AI instrument themselves with OpenTelemetry, so once a graph node opens a span, every model call inside it is already a child. You get one connected trace covering graph transitions and model calls together, rather than the flat list of completions a dashboard usually shows you.
+
+What this stack does with those spans is the part I would argue for. They go into a small trace store inside the agent service, which means `/traces` renders a run as the chain of steps it was with **no account, no signup, and no configuration**. That matters more than it sounds. A reference implementation that needs a vendor account before it shows you anything has lost most of its readers at step one, and an on-call engineer at 2am should not need a third party to answer "what did this run do".
+
+Exporting onward is then one environment variable: off, files on disk, an OTLP collector, or both. Any OTLP-speaking backend should work, since that is the point of a standard, and the repo covers that path with a fake collector that checks spans really leave the process with the right endpoint and auth header. Honest limit: that proves the export path, not any particular vendor's ingestion. Langfuse, Jaeger and Grafana are all OTLP endpoints plus a header, but I have verified the path rather than each product.
+
+When a user reports that the agent did something strange in production, you want evidence, not a reproduction attempt. This is the piece that gives you evidence, and it is yours.
 
 ### pytest with a mocked LLM
 
@@ -132,6 +138,14 @@ Separated, the agent service has one job, and the boundary between them is a con
 ## What we build
 
 A support ticket triage assistant. A ticket arrives, and the agent decides what to do with it: answer it directly, search the knowledge base, escalate it to a human, or draft a reply. Posting that reply to the customer requires human approval; searching the knowledge base does not.
+
+Two views of one ticket. The customer sees it being worked, step by step:
+
+![The customer portal: their billing question, the agent's filing and search decisions, and a working indicator](./_images/portal.png)
+
+The team sees the same ticket with their own lane on it, internal notes beside the agent's answers and the step it chose:
+
+![The staff console on the same ticket: internal notes interleaved with the agent's reply and chosen step](./_images/console.png)
 
 I picked this deliberately. It needs real routing, so the graph earns its place instead of being a two-node demo. It has a naturally irreversible action, so the approval machinery is solving an actual problem rather than an invented one. And it runs on an LLM key alone, with no OAuth flows or third-party signups standing between you and a working checkout.
 
