@@ -1,0 +1,72 @@
+---
+import { getCollection } from "astro:content";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Main from "@/components/Main.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Footer from "@/components/Footer.astro";
+import Datetime from "@/components/Datetime.astro";
+import { getUniqueSeries, shortPartTitle } from "@/utils/getSeries";
+import { getPostUrl } from "@/utils/getPostPaths";
+import { useTranslations, tplStr } from "@/i18n";
+import config from "@/config";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("posts", ({ data }) => !data.draft);
+
+  return getUniqueSeries(posts).map(({ series, seriesName, parts }) => ({
+    params: { series },
+    props: { seriesName, parts },
+  }));
+}
+
+const { seriesName, parts } = Astro.props;
+const locale = Astro.currentLocale ?? config.site.lang;
+const t = useTranslations(locale);
+---
+
+<Layout
+  title={`${seriesName} | ${config.site.title}`}
+  description={tplStr(t.pages.seriesDesc, {
+    series: seriesName,
+    total: parts.length,
+  })}
+>
+  <Header />
+  <Breadcrumb />
+
+  <Main
+    pageTitle={seriesName}
+    pageDesc={tplStr(t.pages.seriesDesc, {
+      series: seriesName,
+      total: parts.length,
+    })}
+  >
+    <ol>
+      {
+        parts.map(post => (
+          <li class="my-6">
+            <a
+              href={getPostUrl(post.id, post.filePath, locale)}
+              class:list={[
+                "text-accent inline-block text-lg font-medium",
+                "decoration-dashed underline-offset-4 hover:underline",
+                "focus-visible:no-underline focus-visible:underline-offset-0",
+              ]}
+            >
+              <h2>{shortPartTitle(post.data.title, seriesName)}</h2>
+            </a>
+            <Datetime
+              pubDatetime={post.data.pubDatetime}
+              modDatetime={post.data.modDatetime}
+              timezone={post.data.timezone}
+            />
+            <p>{post.data.description}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </Main>
+
+  <Footer />
+</Layout>

@@ -3,6 +3,7 @@ export interface UIStrings {
     home: string;
     posts: string;
     tags: string;
+    series: string;
     about: string;
     archives: string;
     search: string;
@@ -21,6 +22,9 @@ export interface UIStrings {
     nextPost: string;
     seriesLabel: string;
     seriesProgress: string;
+    seriesPrevious: string;
+    seriesNext: string;
+    seriesAllParts: string;
   };
   pagination: {
     prev: string;
@@ -52,6 +56,11 @@ export interface UIStrings {
 
     searchTitle: string;
     searchDesc: string;
+
+    seriesListTitle: string;
+    seriesListDesc: string;
+    seriesDesc: string;
+    seriesPartCount: string;
   };
   a11y: {
     skipToContent: string;

@@ -1,4 +1,5 @@
 ---
+import { getCollection } from "astro:content";
 import { getRelativeLocaleUrl } from "astro:i18n";
 import IconUnderline from "@/assets/icons/IconUnderline.svg";
 import IconMenuDeep from "@/assets/icons/IconMenuDeep.svg";
@@ -9,6 +10,7 @@ import IconMoon from "@/assets/icons/IconMoon.svg";
 import IconX from "@/assets/icons/IconX.svg";
 import LinkButton from "./LinkButton.astro";
 import { stripBase, stripLocale } from "@/utils/withBase";
+import { getUniqueSeries } from "@/utils/getSeries";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
@@ -16,6 +18,11 @@ const { site, features } = config;
 
 const locale = Astro.currentLocale ?? config.site.lang;
 const t = useTranslations(locale);
+
+// Shown only once a series exists, so the link can never lead to an empty page.
+const hasSeries =
+  getUniqueSeries(await getCollection("posts", ({ data }) => !data.draft))
+    .length > 0;
 
 // Strip the base prefix so isActive comparisons work regardless of deploy subdirectory.
 // e.g. with base "/blog": "/blog/posts/slug" → "/posts/slug"
@@ -90,6 +97,18 @@ const isActive = (path: string) => {
             {t.nav.tags}
           </a>
         </li>
+        {
+          hasSeries && (
+            <li class="col-span-2">
+              <a
+                href={getRelativeLocaleUrl(locale, "series")}
+                class:list={{ "active-nav": isActive("/series") }}
+              >
+                {t.nav.series}
+              </a>
+            </li>
+          )
+        }
         <li class="col-span-2">
           <a
             href={getRelativeLocaleUrl(locale, "about")}

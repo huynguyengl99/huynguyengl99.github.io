@@ -5,6 +5,7 @@ export default {
     home: "Home",
     posts: "Posts",
     tags: "Tags",
+    series: "Series",
     about: "About",
     archives: "Archives",
     search: "Search",
@@ -22,7 +23,10 @@ export default {
     previousPost: "Previous Post",
     nextPost: "Next Post",
     seriesLabel: "Part of the series",
-    seriesProgress: "{{total}} parts published so far",
+    seriesProgress: "{{total}} parts",
+    seriesPrevious: "Previous",
+    seriesNext: "Next",
+    seriesAllParts: "All {{total}} parts",
   },
   pagination: {
     prev: "Prev",
@@ -54,6 +58,11 @@ export default {
 
     searchTitle: "Search",
     searchDesc: "Search any article ...",
+
+    seriesListTitle: "Series",
+    seriesListDesc: "Multi-part series, in reading order.",
+    seriesDesc: "All {{total}} parts of {{series}}, in reading order.",
+    seriesPartCount: "{{total}} parts",
   },
   a11y: {
     skipToContent: "Skip to content",
