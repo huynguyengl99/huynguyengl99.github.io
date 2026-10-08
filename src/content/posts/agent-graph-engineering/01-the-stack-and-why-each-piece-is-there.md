@@ -145,7 +145,7 @@ Two views of one ticket. The customer sees it being worked, step by step:
 
 The team sees the same ticket with their own lane on it, internal notes beside the agent's answers and the step it chose:
 
-![The staff console on the same ticket: internal notes interleaved with the agent's reply and chosen step](./_images/console.png)
+![The team's lane on the same ticket: an agent reply in rendered markdown, beside an internal note](./_images/console.png)
 
 I picked this deliberately. It needs real routing, so the graph earns its place instead of being a two-node demo. It has a naturally irreversible action, so the approval machinery is solving an actual problem rather than an invented one. And it runs on an LLM key alone, with no OAuth flows or third-party signups standing between you and a working checkout.
 
