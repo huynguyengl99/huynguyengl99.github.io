@@ -22,6 +22,7 @@ export interface UIStrings {
     nextPost: string;
     seriesLabel: string;
     seriesProgress: string;
+    seriesOngoing: string;
     seriesPrevious: string;
     seriesNext: string;
     seriesAllParts: string;
@@ -60,7 +61,10 @@ export interface UIStrings {
     seriesListTitle: string;
     seriesListDesc: string;
     seriesDesc: string;
+    seriesDescOngoing: string;
     seriesPartCount: string;
+    seriesPartCountOngoing: string;
+    seriesMoreComing: string;
   };
   a11y: {
     skipToContent: string;

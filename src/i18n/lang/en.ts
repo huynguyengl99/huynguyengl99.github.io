@@ -24,6 +24,7 @@ export default {
     nextPost: "Next Post",
     seriesLabel: "Part of the series",
     seriesProgress: "{{total}} parts",
+    seriesOngoing: "still being written, a new part every few days",
     seriesPrevious: "Previous",
     seriesNext: "Next",
     seriesAllParts: "All {{total}} parts",
@@ -62,7 +63,10 @@ export default {
     seriesListTitle: "Series",
     seriesListDesc: "Multi-part series, in reading order.",
     seriesDesc: "All {{total}} parts of {{series}}, in reading order.",
+    seriesDescOngoing: "{{total}} parts so far, in reading order. The series is still being written, with a new part every few days.",
     seriesPartCount: "{{total}} parts",
+    seriesPartCountOngoing: "{{total}} parts so far, still being written",
+    seriesMoreComing: "A new part goes up every few days.",
   },
   a11y: {
     skipToContent: "Skip to content",

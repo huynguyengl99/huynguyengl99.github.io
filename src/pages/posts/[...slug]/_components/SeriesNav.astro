@@ -4,6 +4,7 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import { getPostUrl } from "@/utils/getPostPaths";
 import { getSeriesParts, shortPartTitle } from "@/utils/getSeries";
 import { slugifyStr } from "@/utils/slugify";
+import { seriesInfo } from "@/data/series";
 import { useTranslations, tplStr } from "@/i18n";
 import config from "@/config";
 
@@ -41,6 +42,7 @@ const seriesUrl = getRelativeLocaleUrl(locale, `series/${slugifyStr(series)}`);
         <span class="text-muted-foreground">
           {" "}
           · {tplStr(t.post.seriesProgress, { total: parts.length })}
+          {seriesInfo(series).ongoing && <>, {t.post.seriesOngoing}</>}
         </span>
       </p>
 

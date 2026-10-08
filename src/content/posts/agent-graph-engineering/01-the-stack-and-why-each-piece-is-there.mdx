@@ -14,6 +14,8 @@ series: "Agent Graph Engineering"
 seriesOrder: 1
 ---
 
+import SeriesMap from "@/components/SeriesMap.astro";
+
 > **TL;DR** The stack is Python, Pydantic AI for agents, LangGraph for the flow, [chanx](https://github.com/huynguyengl99/chanx) for typed streaming WebSockets and a generated frontend contract, OpenTelemetry into a trace store you own, pytest with a mocked LLM for fast tests, and real-model evals for regressions. Business logic stays in a separate service from the agent graph. The single idea holding it together: every boundary in the system is a declared, typed artifact rather than something you hold in your head. This post makes the case for each piece so you can bring it to your team, then lays out what we build in the rest of the series.
 
 [Part 0](/posts/agent-graph-engineering/before-it-had-a-name/) was the story: years of shipping LLM features as intent detection plus nested conditionals, and why observability tooling never fixed the underlying problem. This post is the pragmatic half.
@@ -173,20 +175,9 @@ It is small enough to read in an afternoon and complete enough to adopt: generat
 
 ## The series map
 
-Twelve posts. Each one stands alone, so you can start wherever your current problem is rather than reading in order. Where a post turns out to be carrying two posts' worth of material I would rather split it than pad it, so a number may grow a letter.
+Each post stands alone, so you can start wherever your current problem is rather than reading in order. Where a post turns out to be carrying two posts' worth of material I would rather split it than pad it, so a number may grow a letter. Greyed-out entries are written but not published yet.
 
-0. [I needed this before it had a name](/posts/agent-graph-engineering/before-it-had-a-name/)
-1. The stack, and why each piece is there (this post)
-2. Split the services: where the line goes between your product and your agent
-3. Contracts, not conventions: how two codebases stay in step
-4. The agent and the graph: a typed model call, and the flow that routes it
-5. Tools and guardrails: what the model may do, and what it may say
-6. Subgraphs, persistence, and interrupts: how a run pauses for a human
-7. Why a WebSocket, and how progress streams from anywhere in the graph
-8. Practices for both sides: the business service and the agent service
-9. Observability: tracing a run, seeing the graph, and what it cost
-10. Testing and evals: changing a model or a prompt without fear
-11. Shipping it: containers, config, and the steps you still owe
+<SeriesMap series="Agent Graph Engineering" current="the-stack-and-why-each-piece-is-there" />
 
 Post 6 is the one I expect to be most useful. State that survives a pause, and a run that resumes into the middle of itself, are the hardest parts in practice and the least written about anywhere. The ordering inside it is not negotiable either: persistence has to come before interrupts, because an interrupt only works at all because the checkpointer exists.
 

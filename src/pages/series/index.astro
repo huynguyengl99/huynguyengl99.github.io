@@ -6,6 +6,7 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
 import { getUniqueSeries } from "@/utils/getSeries";
+import { seriesInfo } from "@/data/series";
 import { useTranslations, tplStr } from "@/i18n";
 import { getRelativeLocaleUrl } from "astro:i18n";
 import config from "@/config";
@@ -37,7 +38,12 @@ const t = useTranslations(locale);
               <h2>{seriesName}</h2>
             </a>
             <p class="text-muted-foreground text-sm">
-              {tplStr(t.pages.seriesPartCount, { total: parts.length })}
+              {tplStr(
+                seriesInfo(seriesName).ongoing
+                  ? t.pages.seriesPartCountOngoing
+                  : t.pages.seriesPartCount,
+                { total: parts.length }
+              )}
             </p>
           </li>
         ))

@@ -7,6 +7,7 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import Footer from "@/components/Footer.astro";
 import Datetime from "@/components/Datetime.astro";
 import { getUniqueSeries, shortPartTitle } from "@/utils/getSeries";
+import { seriesInfo } from "@/data/series";
 import { getPostUrl } from "@/utils/getPostPaths";
 import { useTranslations, tplStr } from "@/i18n";
 import config from "@/config";
@@ -23,24 +24,24 @@ export async function getStaticPaths() {
 const { seriesName, parts } = Astro.props;
 const locale = Astro.currentLocale ?? config.site.lang;
 const t = useTranslations(locale);
+
+const { ongoing } = seriesInfo(seriesName);
+const blurb = tplStr(ongoing ? t.pages.seriesDescOngoing : t.pages.seriesDesc, {
+  series: seriesName,
+  total: parts.length,
+});
 ---
 
 <Layout
   title={`${seriesName} | ${config.site.title}`}
-  description={tplStr(t.pages.seriesDesc, {
-    series: seriesName,
-    total: parts.length,
-  })}
+  description={blurb}
 >
   <Header />
   <Breadcrumb />
 
   <Main
     pageTitle={seriesName}
-    pageDesc={tplStr(t.pages.seriesDesc, {
-      series: seriesName,
-      total: parts.length,
-    })}
+    pageDesc={blurb}
   >
     <ol>
       {
@@ -66,6 +67,14 @@ const t = useTranslations(locale);
         ))
       }
     </ol>
+
+    {
+      ongoing && (
+        <p class="border-border text-muted-foreground mt-8 border-t pt-6 text-sm">
+          More to come. {t.pages.seriesMoreComing}
+        </p>
+      )
+    }
   </Main>
 
   <Footer />
