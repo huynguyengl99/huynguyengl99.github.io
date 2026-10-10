@@ -1,0 +1,102 @@
+/* Shared look for every series cover. 1600x900, rendered at 1.5x to 2400x1350. */
+:root {
+  --background: #fdfdfd;
+  --foreground: #282728;
+  --accent: #006cac;
+  --muted-foreground: #6b7280;
+  --border: #ece9e9;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1600px; height: 900px; }
+body {
+  font-family: "Google Sans Code", ui-monospace, monospace;
+  background: var(--background);
+  color: var(--foreground);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 72px;
+  align-content: center;
+  padding: 96px 88px;
+  position: relative;
+}
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 10px;
+  background: var(--accent);
+}
+.eyebrow {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 30px;
+}
+h1 {
+  font-size: 70px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin-bottom: 34px;
+}
+.kicker {
+  font-size: 25px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  max-width: 19em;
+}
+.byline {
+  position: absolute;
+  left: 88px;
+  bottom: 64px;
+  font-size: 20px;
+  color: var(--muted-foreground);
+}
+.byline b { color: var(--foreground); font-weight: 700; }
+
+/* Right panel: a table of layers (Part 1) */
+.panel { align-self: center; }
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 24px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border);
+}
+.row:first-child { border-top: 3px solid var(--foreground); padding-top: 20px; }
+.row:last-child { border-bottom: 3px solid var(--foreground); }
+.layer { font-size: 20px; letter-spacing: 0.04em; color: var(--muted-foreground); }
+.choice { font-size: 27px; font-weight: 700; text-align: right; }
+.row.split .choice { color: var(--accent); }
+
+/* Right panel: before and after (Part 0) */
+.stage + .stage { margin-top: 54px; }
+.stage-label {
+  font-size: 19px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  margin-bottom: 18px;
+}
+.code {
+  font-size: 24px;
+  line-height: 1.65;
+  color: var(--muted-foreground);
+  border-left: 3px solid var(--border);
+  padding-left: 24px;
+}
+.code .i1 { padding-left: 2.2em; }
+.code .i2 { padding-left: 4.4em; }
+.nodes { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.node {
+  border: 3px solid var(--foreground);
+  border-radius: 6px;
+  padding: 11px 19px;
+  font-size: 23px;
+  font-weight: 700;
+}
+.node.on { border-color: var(--accent); color: var(--accent); }
+.arrow { font-size: 25px; color: var(--muted-foreground); }

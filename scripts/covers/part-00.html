@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body>
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 0</div>
+    <h1>I Needed This Before It Had a Name</h1>
+    <p class="kicker">The flow only existed in the code, in my head, and in a diagram that was already out of date.</p>
+  </div>
+
+  <div class="panel">
+    <div class="stage">
+      <div class="stage-label">What I was writing</div>
+      <div class="code">
+        <div>intent = classify(message)</div>
+        <div>if intent == "search":</div>
+        <div class="i1">if user.is_premium:</div>
+        <div class="i2">...</div>
+        <div>elif intent == "refund":</div>
+        <div class="i1">...</div>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-label">What I actually wanted</div>
+      <div class="nodes">
+        <span class="node">classify</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node on">decide</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node">tool</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node">respond</span>
+      </div>
+    </div>
+  </div>
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>

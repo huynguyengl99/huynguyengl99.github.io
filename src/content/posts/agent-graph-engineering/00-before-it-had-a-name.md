@@ -1,6 +1,7 @@
 ---
 title: "Agent Graph Engineering, Part 0: I Needed This Before It Had a Name"
 description: "Years of shipping LLM features as intent detection and nested conditionals, the state machine idea that would not go away, and the library I started building and abandoned before the practice had a name. The story behind this series, and why graphs outlive the frameworks that implement them."
+ogImage: ./_images/cover-00.png
 pubDatetime: 2026-09-19T09:00:00+07:00
 tags:
   - ai-agents
