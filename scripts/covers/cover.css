@@ -100,3 +100,59 @@ h1 {
 }
 .node.on { border-color: var(--accent); color: var(--accent); }
 .arrow { font-size: 25px; color: var(--muted-foreground); }
+
+/* Long titles get a smaller size so they still fit three lines */
+body.long h1 { font-size: 58px; }
+
+/* Right panel: two columns of short lines */
+.split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+.col-head {
+  font-size: 19px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 3px solid var(--foreground);
+}
+.col li { list-style: none; font-size: 22px; line-height: 1.5; margin-bottom: 14px; }
+
+/* Right panel: left term mapped to right term */
+.map { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 18px 20px; }
+.map .from { font-size: 26px; font-weight: 700; }
+.map .to { font-size: 26px; color: var(--accent); font-weight: 700; }
+.map .arrow { justify-self: center; }
+
+/* Right panel: an indented tree with a value on the right */
+.tree { font-size: 23px; line-height: 1.95; }
+.tree div { display: grid; grid-template-columns: 1fr auto; }
+.tree .d1 { padding-left: 2em; color: var(--muted-foreground); }
+.tree .d2 { padding-left: 4em; color: var(--muted-foreground); }
+.tree .total {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 3px solid var(--foreground);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Right panel: nested boxes */
+.nest { border: 3px solid var(--foreground); border-radius: 8px; padding: 26px; }
+.nest .cap { font-size: 20px; color: var(--muted-foreground); margin-bottom: 18px; }
+.nest .inner { border: 3px dashed var(--accent); border-radius: 8px; padding: 22px; }
+.nest .inner .cap { color: var(--accent); }
+.nest .pause { font-size: 23px; font-weight: 700; }
+.nest .foot { margin-top: 20px; font-size: 21px; color: var(--muted-foreground); }
+
+/* Right panel: a vertical flow */
+.flow { font-size: 24px; line-height: 1.35; }
+.flow .step { padding: 11px 0; }
+.flow .step.on { color: var(--accent); font-weight: 700; }
+.flow .tick { color: var(--muted-foreground); font-size: 20px; padding-left: 4px; }
+
+/* Right panel: done against still owed */
+.checks li { list-style: none; font-size: 23px; line-height: 1.5; margin-bottom: 13px; }
+.checks .yes::before { content: "\2713\00a0\00a0"; color: var(--accent); font-weight: 700; }
+.checks .no::before { content: "\25cb\00a0\00a0"; color: var(--muted-foreground); }
+.checks .no { color: var(--muted-foreground); }
+.checks .gap { margin-top: 26px; }
