@@ -1,4 +1,5 @@
 ---
+import { Image } from "astro:assets";
 import { type CollectionEntry, getCollection, render } from "astro:content";
 import PostLayout from "@/layouts/PostLayout.astro";
 import Header from "@/components/Header.astro";
@@ -95,6 +96,10 @@ if (!ogImageUrl && config.features.dynamicOgImage) {
 const ogImage = ogImageUrl
   ? new URL(ogImageUrl, Astro.url.origin).href
   : undefined;
+
+// A cover declared in frontmatter leads the post. The generated social card is
+// metadata only: it carries nothing the page does not already show.
+const cover = typeof initOgImage === "object" ? initOgImage : undefined;
 ---
 
 <PostLayout
@@ -136,6 +141,19 @@ const ogImage = ogImageUrl
     </div>
 
     {series && <SeriesNav {series} currentId={post.id} />}
+
+    {
+      cover && (
+        <Image
+          src={cover}
+          alt=""
+          widths={[640, 960, 1280]}
+          sizes="(max-width: 48rem) 100vw, 48rem"
+          loading="eager"
+          class="border-border mt-8 w-full rounded-lg border"
+        />
+      )
+    }
 
     <article
       id="article"
