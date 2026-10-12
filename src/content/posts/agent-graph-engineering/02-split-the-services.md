@@ -60,7 +60,7 @@ So the argument for splitting is narrower and more useful than "separation of co
 
 ## The cut is about state, not layers
 
-The instinct is to split by technology or by layer. API service, agent service, maybe a worker. That produces a diagram your architect likes and a boundary that leaks within a month, because layers are not what is actually different about these two things.
+The instinct is to split by technology or by layer: an API tier, a service tier, maybe a cache in front. That produces a diagram your architect likes and a boundary that leaks within a month, because layers are not what is actually different about these two things.
 
 What is actually different is the kind of state each one holds.
 
@@ -78,9 +78,7 @@ In the reference implementation it comes out as three services:
 | `agent/`   | graphs, tools, checkpoints, the model's memory  | 8001 |
 | `web/`     | nothing; it renders what the other two generate | 5173 |
 
-Four processes, though: a run is driven by a worker rather than by whichever
-web process took the request, which is the backend's own code on a queue and
-not a fourth owner of anything.
+Three services and four processes, because a run is driven by a worker rather than by whichever web process accepted the request. That worker is the backend's own code pulling from a queue, so it owns nothing the table does not already list.
 
 The agent is internal. Only the backend connects to it, never a browser, and that matters more than it looks. The approval gate lives inside the graph, so anything that can open a socket on the agent can both propose a tool call and approve it. Network isolation is the primary control there and a shared token is the second one, which is why the token is optional in a fresh clone and not optional anywhere real.
 
@@ -119,9 +117,15 @@ class Sink:
     async def drafted(self, content: str, model: str) -> None: ...
     async def approval_required(self, draft: str, findings: list[str]) -> None: ...
     async def reply_sent(self, content: str) -> None: ...
+    async def reply_blocked(self, findings: list[str]) -> None: ...
     async def token(self, delta: str) -> None: ...
+    async def answered(self, content: str, model: str) -> None: ...
     async def tool_proposed(self, payload: Any) -> None: ...
     async def tool_ran(self, payload: Any) -> None: ...
+    async def reasoning_delta(self, step: str, delta: str) -> None: ...
+    async def reasoned(
+        self, step: str, content: str, decision: str, model: str
+    ) -> None: ...
     async def failed(self, message: str) -> None: ...
 ```
 
@@ -153,7 +157,7 @@ Change a message on the agent, regenerate, and the backend stops type-checking. 
 
 Two services is more than one service, and I would rather say the costs out loud than discover them in your comments.
 
-You now run two processes locally, with two sets of environment variables and a shared token that has to match in both. The repo hides that behind a single setup command, but somebody wrote that command.
+You now run two services locally, each with its own environment file and a shared token that has to match in both, plus a worker and the web app. The repo hides that behind a single setup command, but somebody wrote that command.
 
 You have a network hop on the critical path. For this workload it disappears into model latency, which is measured in seconds, so a few milliseconds of local socket is noise. If your agent were doing something fast and chatty, the calculus would change.
 
