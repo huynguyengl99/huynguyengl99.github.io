@@ -17,6 +17,8 @@ seriesOrder: 2
 
 [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) listed the stack and said, in one line, to keep business logic out of the agent. That line does a lot of work and deserves its own post, because it is the decision that is nearly free this month and expensive in a year, and because "split it into two services" is useless advice until somebody tells you where the cut goes.
 
+## Table of contents
+
 ## What the merged version looks like
 
 I have shipped the single-service version. It does not fail dramatically. It degrades, in a way that is hard to argue with in a code review because every individual step was reasonable.

@@ -36,6 +36,8 @@ One thing before the story, because I would want to know. None of what follows i
 
 The code that goes with this series is the same story. It is distilled from a production system of five services, out of about five years spent on realtime infrastructure and agent systems, three of those on one agent product and two on another. What carries over is not the domain, which is deliberately gone, but the failure modes. The parts that look over-careful are the parts that broke somewhere else first.
 
+## Table of contents
+
 ## Where I was
 
 Years ago, right around when ChatGPT landed, my team and I were building an AI product in the financial domain. I was not starting from zero: I had trained GPT-2 models, built realtime systems with Django Channels, shipped chatbots before.
