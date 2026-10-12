@@ -68,13 +68,17 @@ The backend owns the record: messages, ticket events, and the two things a page 
 
 Once the line is drawn there, a lot of smaller questions answer themselves. Permissions, billing, and user records are obviously the backend's, because they are the record. Prompts, tools, and routing are obviously the agent's, because they are execution. The service the agent exposes has one job, and the service your product lives in never imports LangGraph.
 
-In the reference implementation it comes out as three processes:
+In the reference implementation it comes out as three services:
 
 | Service    | Owns                                            | Port |
 | ---------- | ----------------------------------------------- | ---- |
 | `backend/` | users, tickets, the thread as a person reads it | 8000 |
 | `agent/`   | graphs, tools, checkpoints, the model's memory  | 8001 |
 | `web/`     | nothing; it renders what the other two generate | 5173 |
+
+Four processes, though: a run is driven by a worker rather than by whichever
+web process took the request, which is the backend's own code on a queue and
+not a fourth owner of anything.
 
 The agent is internal. Only the backend connects to it, never a browser, and that matters more than it looks. The approval gate lives inside the graph, so anything that can open a socket on the agent can both propose a tool call and approve it. Network isolation is the primary control there and a shared token is the second one, which is why the token is optional in a fresh clone and not optional anywhere real.
 

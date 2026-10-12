@@ -59,6 +59,7 @@ The sentence that keeps turning up in hiring write-ups is that a demo agent is e
 | Tests          | pytest + mocked LLM    | Fast, deterministic, no API spend                                                                  |
 | Regressions    | Evals with real models | Catch what mocks cannot when you change a model or a prompt                                        |
 | Business logic | A separate service     | Keeps your product's domain out of your agent's graph                                              |
+| Runs           | A worker, on Celery    | A run outlives the process that asked for it, so a deploy does not take the work in flight with it |
 
 ### Python
 
