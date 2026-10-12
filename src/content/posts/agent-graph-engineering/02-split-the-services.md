@@ -1,6 +1,6 @@
 ---
 title: "Agent Graph Engineering, Part 2: Split the Services, and Know Where the Line Goes"
-description: "Why the agent graph and the business logic belong in dedicated services, how to draw the line at state ownership rather than at layers, why a node you can call beats a decision you have to reach through a socket, and the bug that taught me the thread a person reads and the thread a model remembers are not the same object."
+description: "Why the agent graph and the business logic belong in dedicated services, how to draw the line at state ownership rather than at layers, and the bug that taught me the thread a person reads and the thread a model remembers are not the same object."
 ogImage: ./_images/cover-02.png
 pubDatetime: 2026-10-12T09:00:00+07:00
 tags:
@@ -13,7 +13,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 2
 ---
 
-> **TL;DR** Put your product's domain in one service and your agent graph in another, and draw the line at state ownership rather than at anything that sounds like a layer. The agent owns execution state, which is a LangGraph checkpoint nobody can rebuild by hand. The backend owns the record, which is what a page reload needs. Updates travel one way, agent to backend, over a generated WebSocket client. The payoff is not tidiness, it is that a node is a function you can call with a state you invented, while the same decision inside a socket consumer needs a connection and a user before it will run at all. The part I got wrong the first time: the thread a person reads and the thread a model remembers are two different objects, and trying to store them as one leaves you with two copies that can disagree.
+> **TL;DR** Put your product's domain in one service and your agent graph in another, and draw the line at state ownership rather than at anything that sounds like a layer. The agent owns execution state, which is a LangGraph checkpoint nobody can rebuild by hand. The backend owns the record, which is what a page reload needs. Updates travel one way, agent to backend, over a generated WebSocket client. The payoff is not tidiness, it is that a node is a function you can call with a state you invented, while the same decision inside a socket consumer needs a connection and a user before it will run at all.
 
 [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) listed the stack and said, in one line, to keep business logic out of the agent. That line does a lot of work and deserves its own post, because it is the decision that is nearly free this month and expensive in a year, and because "split it into two services" is useless advice until somebody tells you where the cut goes.
 
