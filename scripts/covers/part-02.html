@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body class="long">
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 2</div>
+    <h1>Split the Services, and Know Where the Line Goes</h1>
+    <p class="kicker">Draw the line at state ownership, not at anything that sounds like a layer.</p>
+  </div>
+
+  <div class="panel">
+    <div class="split2">
+      <div class="col">
+        <div class="col-head">Backend owns</div>
+        <ul>
+          <li>the record</li>
+          <li>what a reload needs</li>
+          <li>auth and tickets</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="col-head">Agent owns</div>
+        <ul>
+          <li>execution state</li>
+          <li>the checkpoint</li>
+          <li>graphs and tools</li>
+        </ul>
+      </div>
+    </div>
+    <div class="nodes" style="margin-top:46px">
+      <span class="node on">agent</span>
+      <span class="arrow">&rarr;</span>
+      <span class="node">backend</span>
+      <span class="arrow" style="font-size:20px">&nbsp;updates travel one way</span>
+    </div>
+  </div>
+
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>
