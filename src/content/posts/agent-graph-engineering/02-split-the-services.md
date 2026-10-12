@@ -84,7 +84,7 @@ not a fourth owner of anything.
 
 The agent is internal. Only the backend connects to it, never a browser, and that matters more than it looks. The approval gate lives inside the graph, so anything that can open a socket on the agent can both propose a tool call and approve it. Network isolation is the primary control there and a shared token is the second one, which is why the token is optional in a fresh clone and not optional anywhere real.
 
-## The bug: two threads, not one
+## Two threads, not one
 
 I got this wrong the first time, and the symptom was confusing enough to be worth the detail.
 
