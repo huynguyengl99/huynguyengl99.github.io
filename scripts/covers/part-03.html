@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body class="">
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 3</div>
+    <h1>Contracts, Not Conventions</h1>
+    <p class="kicker">A hand-maintained seam is a slow leak. Declare the shape once, generate the rest.</p>
+  </div>
+
+  <div class="panel">
+    <div class="stage">
+      <div class="stage-label">The REST seam</div>
+      <div class="nodes">
+        <span class="node">serializers</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node">OpenAPI</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node on">typed client</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-label">The WebSocket seam</div>
+      <div class="nodes">
+        <span class="node">consumers</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node">AsyncAPI</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node on">TS + Python</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-label">And the one nobody writes</div>
+      <div class="nodes">
+        <span class="node">tool schema</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node on">the approval form</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>
