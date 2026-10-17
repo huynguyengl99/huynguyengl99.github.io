@@ -114,7 +114,11 @@ ticketTeamTopic: defineTopic<
 }),
 ```
 
-Two details in there are worth stopping on.
+Ignore the spelling. The same name appears three ways across those two blocks, and that is a case transform you configure once and forget, not anything the contract is doing. What matters is which fields crossed.
+
+The list did, exactly. Six message types on the Python side, the same six in the TypeScript union, and each one carries its own generated type behind it. Add a seventh to `passthrough_events` and it appears in the union on the next generation; remove one and every frontend branch still handling it stops compiling. That is the property worth having, and it is about fields rather than names.
+
+Two more details are worth stopping on.
 
 The first is `ToServer = never`. The Python class says outbound only, by listing no inbound handlers, and that fact survives all the way into the type system of a different language. A frontend developer who tries to send on that topic gets a compile error rather than a message that vanishes into a channel nobody reads. Nobody wrote that rule down twice. It was declared once, as the absence of handlers, and the absence travelled.
 
