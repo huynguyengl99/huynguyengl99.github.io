@@ -13,7 +13,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 3
 ---
 
-> **TL;DR** Three services in two languages means three seams, and a hand-maintained seam is a slow leak. Declare the shapes once on the server, generate everything else: OpenAPI becomes a typed REST client, AsyncAPI becomes a typed WebSocket client in TypeScript and another in Python. The compiler then tells you what broke instead of a user telling you. The payoff that surprised me is not the typing, it is the form I never wrote: a tool's arguments render themselves from their own schema, so a reviewer cannot approve a call whose fields they were never shown.
+> **TL;DR** Three services in two languages means three seams, and a hand-maintained seam is a slow leak. Declare the shapes once on the server, generate everything else: OpenAPI becomes a typed REST client, AsyncAPI becomes a typed WebSocket client in TypeScript and another in Python. The compiler then tells you what broke instead of a user telling you. The same declarations build the approval form, so a reviewer cannot approve a call whose fields they were never shown.
 
 [Part 2](/posts/agent-graph-engineering/split-the-services/) split the agent off from the business and drew the line at state ownership. That split creates a boundary, and a boundary between two codebases is where systems quietly go wrong. This post is about making it impossible for that boundary to drift.
 
