@@ -182,6 +182,6 @@ A public API with external consumers you cannot recompile: generation still help
 
 The sweet spot is exactly the shape in this series: a handful of services, one team, two languages, changing weekly. That is where a generated seam turns a class of silent production bug into a red squiggle.
 
-Next up is the agent and the graph together, which is where the series finally gets into the part everyone came for: a typed model call, and the flow that decides what happens next. Hope this one is useful, particularly the form argument, which I think is underrated.
+Next up is [the agent and the graph together](/posts/agent-graph-engineering/the-agent-and-the-graph/), which is where the series finally gets into the part everyone came for: a typed model call, and the flow that decides what happens next. Hope this one is useful, particularly the form argument, which I think is underrated.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).

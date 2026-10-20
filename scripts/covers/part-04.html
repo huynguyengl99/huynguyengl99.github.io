@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body class="">
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 4</div>
+    <h1>The Agent and the Graph</h1>
+    <p class="kicker">The agent's output type is the routing table. The transition is a type, not a parsed string.</p>
+  </div>
+
+  <div class="panel">
+    <div class="stage-label">The deciding step returns one of these</div>
+    <div class="map">
+      <span class="from">Answer</span><span class="arrow">&rarr;</span><span class="to">respond</span>
+      <span class="from">SearchKnowledge</span><span class="arrow">&rarr;</span><span class="to">knowledge</span>
+      <span class="from">UseTool</span><span class="arrow">&rarr;</span><span class="to">tool</span>
+      <span class="from">Escalate</span><span class="arrow">&rarr;</span><span class="to">escalate</span>
+    </div>
+    <div class="stage" style="margin-top:46px">
+      <div class="code" style="font-size:22px">
+        <div>match decision:</div>
+        <div class="i1">case Escalate():</div>
+        <div class="i2">return Command(goto="escalate")</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>
