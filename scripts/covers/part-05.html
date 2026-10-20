@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body class="">
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 5</div>
+    <h1>Tools and Guardrails</h1>
+    <p class="kicker">Constrain the model declaratively, rather than by inspecting what it produced.</p>
+  </div>
+
+  <div class="panel">
+    <div class="stage">
+      <div class="stage-label">Both edges, same idea</div>
+      <div class="nodes">
+        <span class="node on">fence input</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node">model</span>
+        <span class="arrow">&rarr;</span>
+        <span class="node on">screen output</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="stage-label">And in between</div>
+      <ul class="checks">
+        <li class="yes">a tool raises a structured error</li>
+        <li class="yes">never returns prose to interpret</li>
+        <li class="yes">anything irreversible runs at most once</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>

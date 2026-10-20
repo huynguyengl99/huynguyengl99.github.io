@@ -233,6 +233,6 @@ One model call and a response: do not build a graph. A function is correct and a
 
 A single agent looping over tools until it is done also does not need one. That is a loop, the loop is a well-understood shape, and most frameworks give it to you directly. The distinction, which I wish I had had years earlier, is that **a loop iterates against a bar you set, and a graph coordinates between steps.** If your problem is "keep trying until this is good enough", you want a loop. If it is "work out which of four things to do, maybe hand off, maybe stop for a person", you want a graph. They coexist happily, and a node can contain a loop.
 
-Next is tools and guardrails: what the model is allowed to do, and what it is allowed to say. Hope this one was useful, especially the part about output types being the routing table, which is the single idea I would want someone to take from the whole series.
+Next is [tools and guardrails](/posts/agent-graph-engineering/tools-and-guardrails/): what the model is allowed to do, and what it is allowed to say. Hope this one was useful, especially the part about output types being the routing table, which is the single idea I would want someone to take from the whole series.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).
