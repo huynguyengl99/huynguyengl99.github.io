@@ -68,6 +68,8 @@ That is the entire abstraction. `purpose` says which model fills this role, so a
 
 One detail in the docstring is load-bearing: agents are **built per run, not at import**. The model filling a purpose is resolved from the user's configuration when the request arrives, so constructing agents at import time would bake in whatever the config said at boot. It also means a test can build one with a scripted model and nothing global needs patching.
 
+A fair question at this point is why there is a class here at all, rather than calling the library's `Agent(...)` behind a factory. A factory alone works, and it is what I had before. The difference is that `purpose` is not a model: a factory resolves purpose to model from the requesting user's config, and the base class is what makes a step unable to name a model even if someone wanted to. With a factory the uniform shape is a convention, and conventions drift, which is the argument in [Part 3](/posts/agent-graph-engineering/contracts-not-conventions/) turned on my own code. The cost is a layer you have to escape when one agent genuinely needs something bespoke. With five near-identical steps it pays; with sixteen heterogeneous ones I would think harder.
+
 Note what `run` returns. Not a string. `OutputT`.
 
 ## The output type is the routing table
@@ -189,6 +191,12 @@ return Command(update=update, goto=_route_for(decision, context.for_customer))
 
 Run an agent, write what it decided into state, go where the decision says. The node has no idea what `knowledge` does. It just names it.
 
+Worth being precise about the division there, because it is easy to read the snippet and ask why the routing does not use the decision's fields. **The type picks the destination; the fields ride along in the state update.** `SearchKnowledgeBase.query` is read and written into state, and the route is chosen purely by which member came back. That is deliberate: `_route_for` returns `Literal["knowledge", "tool", "support_escalate", "support_respond"]`, so the type checker proves every branch lands on a node that exists. Branch on a field value instead and you are back to routing on data, with nothing checking you covered the cases.
+
+The other honest note: `goto` takes a node name, so a string does appear at the very end. The library's API requires it. What changed is that the string is produced by an exhaustive match on a type rather than compared against one, and the `Literal` return means a typo is a type error rather than a run that silently goes nowhere.
+
+`_route_for` is a separate function for one practical reason: it can be called in a test without running the graph, which three of them do.
+
 That comment about the handoff is a small design decision with real consequences. The knowledge subgraph receives `decision.query`, the search terms the deciding model chose, rather than the whole ticket. The decider has already read the ticket and formed a view about what to look for, and throwing that away to re-derive it downstream both costs a model call and loses information.
 
 ## State is declared too
@@ -217,7 +225,20 @@ The `Annotated[str, remembered]` is a reducer, which is how you say what happens
 
 ## What it costs
 
-The honest version, because [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) promised it.
+The honest version, because [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) promised it. A list of costs with nothing to weigh them against is not much use, so here are the three shapes side by side:
+
+| | `if/else` | a loop | a declared graph |
+| --- | --- | --- | --- |
+| Lines for the same behavior | fewest | few | most |
+| Can be drawn from the code | no | no | yes, exported from the compiled object |
+| Pause for a person, resume later | build it yourself | build it yourself | falls out of checkpointing |
+| Per-step trace | whatever you log | whatever you log | a span per node, free |
+| Test one decision | needs the surrounding call path | needs the surrounding call path | call the node with a state you invented |
+| Adding a branch | another condition in an existing chain | another condition in an existing chain | a node and an edge |
+| Cost of being wrong early | cheap to change | cheap to change | a state redesign, not a patch |
+
+The row that decides it is usually not line count. It is whether you ever need to answer "what did this run actually do", from a trace or a diagram, after the fact.
+
 
 **You write more code for the same behavior.** The `if/else` version of the routing above is shorter. It stays shorter right up until the first time you need to pause, resume, trace, or draw it.
 
@@ -231,7 +252,13 @@ The honest version, because [Part 1](/posts/agent-graph-engineering/the-stack-an
 
 One model call and a response: do not build a graph. A function is correct and a graph is ceremony.
 
-A single agent looping over tools until it is done also does not need one. That is a loop, the loop is a well-understood shape, and most frameworks give it to you directly. The distinction, which I wish I had had years earlier, is that **a loop iterates against a bar you set, and a graph coordinates between steps.** If your problem is "keep trying until this is good enough", you want a loop. If it is "work out which of four things to do, maybe hand off, maybe stop for a person", you want a graph. They coexist happily, and a node can contain a loop.
+A single agent looping over tools until it is done is the harder call, and I had this wrong in an earlier draft. The distinction I reached for is that **a loop iterates against a bar you set, and a graph coordinates between steps**, so "keep trying until this is good enough" is a loop and "work out which of four things to do, maybe hand off, maybe stop for a person" is a graph.
+
+That distinction is real but it is not a reason to keep the loop out of the graph, and this codebase does not. The knowledge subgraph is a loop: `knowledge_search` goes to `knowledge_refine` when nothing came back, `knowledge_refine` goes straight back to `knowledge_search`, and the cycle is bounded by a maximum attempt count. Its docstring says "a subgraph because it loops".
+
+The reason to express it that way is the same reason the rest of this series exists. A `while` loop inside a node is invisible: you get one span for the node and no idea how many times it went round or which attempt found something. As a cycle in the graph you can see the shape in the diagram, every iteration gets its own span in the trace, and a run that is stuck going round shows up as exactly that rather than as a slow node.
+
+So the honest rule is narrower than "loops do not need graphs". If the loop is one call retrying against a bar, leave it in the function. If you will ever want to see what it did on attempt three, make it a cycle.
 
 Next is [tools and guardrails](/posts/agent-graph-engineering/tools-and-guardrails/): what the model is allowed to do, and what it is allowed to say. Hope this one was useful, especially the part about output types being the routing table, which is the single idea I would want someone to take from the whole series.
 
