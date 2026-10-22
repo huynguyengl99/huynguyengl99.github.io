@@ -50,7 +50,13 @@ class ToolError(Exception):
     `message` is LLM-facing and may carry technical detail. `user_message` is
     what a human sees; it defaults to the message when not given.
     """
+
     error_type = "tool_error"
+
+    def __init__(self, message: str, *, user_message: str | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.user_message = user_message or message
 
 
 class InvalidInputError(ToolError):
@@ -68,7 +74,19 @@ The wrapper catches `ToolError` and turns it into a result carrying a machine-re
 
 Two properties fall out, and the second one took me an incident to appreciate.
 
-**Two audiences, one failure.** `message` is what the model sees and can be as technical as you like. `user_message` is what a person sees. Collapsing those into one string means either leaking stack-trace detail to a customer or starving the model of the information it needs.
+**Two audiences, one failure.** `message` is what the model sees and can be as technical as you like. `user_message` is what a person sees, and it falls back to `message` when a tool does not bother. Collapsing them into one string means either leaking internals to a customer or starving the model of what it needs to recover. The refund ceiling is the clearest case:
+
+```python
+raise InvalidInputError(
+    f"issue_refund called with amount={amount}, over the "
+    f"£{MAX_SELF_SERVE:.0f} self-serve ceiling.",
+    user_message=(
+        f"Refunds over £{MAX_SELF_SERVE:.0f} have to go through finance."
+    ),
+)
+```
+
+The model is told the argument it passed and the limit it broke, which is what it needs to decide whether to retry with a smaller amount or escalate. The customer is told the policy. Neither sentence would do both jobs.
 
 **Anything that is not a `ToolError` propagates.** That is deliberate and it is the important half. A `ZeroDivisionError` is a bug, not a handled failure, and converting it into a tidy tool result is how you ship a system that silently does the wrong thing and looks healthy. Let it crash, let the run fail loudly, and find out.
 
@@ -159,6 +177,18 @@ class Severity(StrEnum):
 ```
 
 That is the detection-versus-demarcation argument made concrete. A suspected injection on the way in is a `NOTICE`: visible in the trace, no customer refused. Something shaped like a credential on the way out is a `BLOCK`: the draft does not reach a reviewer at all, because there is no judgement call to make about leaking a secret.
+
+### What this does not cover
+
+Being straight about the limits, because a guardrails section that sounds complete is its own hazard.
+
+The pattern list is thirteen regexes and it catches the lazy attempt. It does not catch a payload that is base64 or hex encoded, and it does not catch anything rephrased around the wording. That is survivable here only because detection was never the defence: demarcation is, and demarcation does not care how the attempt is spelled.
+
+The gap I would actually worry about is **indirect injection**. Everything above screens the ticket, which is the text a customer typed. It does not screen what comes back from a tool, or the contents of an attachment, and those reach the model too. A knowledge base article someone else wrote is attacker-controlled in exactly the same way a ticket is, and it arrives through a path with no fence around it.
+
+On the way out, secrets and foreign identifiers are screened, which is more than the input side gets. There is no PII redaction.
+
+Worth knowing where this plugs in if you want more. Pydantic AI does not ship guardrails: what it ships is `pydantic_ai.capabilities`, a hook API with `WrapToolExecuteHandler`, `WrapOutputValidateHandler` and `content_filter`, plus `Agent.output_validator`. That is the seam. Packages like [pydantic-ai-shields](https://github.com/vstorm-co/pydantic-ai-shields) and [pydantic-ai-guardrails](https://github.com/jagreehal/pydantic-ai-guardrails) build on it and cover encoding, PII and secret redaction properly. I have not adopted one here, because the thing I want this repo to argue is the ranking rather than the regex list, and a young dependency teaches neither. If you are shipping to real customers, the hook is there and the libraries are better at detection than thirteen patterns of mine will ever be.
 
 ### Output screening sits before the gate, not instead of it
 
