@@ -23,9 +23,23 @@ const sortedPosts = getSortedPosts(posts);
 const featuredPosts = sortedPosts.filter(({ data }) => data.featured);
 const recentPosts = sortedPosts.filter(({ data }) => !data.featured);
 const homePath = getRelativeLocaleUrl(locale, "");
+
+const websiteData = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: config.site.title,
+  alternateName: [config.site.author, "huynguyengl99"],
+  url: config.site.url,
+};
 ---
 
 <Layout>
+  <script
+    slot="head"
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify(websiteData)}
+  />
   <Header />
   <main
     id="main-content"

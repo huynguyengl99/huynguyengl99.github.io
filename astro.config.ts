@@ -18,7 +18,10 @@ import {
   transformerNotationWordHighlight,
 } from "@shikijs/transformers";
 import { transformerFileName } from "./src/utils/transformers/fileName";
+import { getPostLastmods } from "./src/utils/postLastmod";
 import config from "./astro-paper.config";
+
+const postLastmods = getPostLastmods(config.site.url);
 
 export default defineConfig({
   site: config.site.url,
@@ -31,6 +34,7 @@ export default defineConfig({
     sitemap({
       filter: page =>
         config.features?.showArchives !== false || !page.endsWith("/archives/"),
+      serialize: item => ({ ...item, lastmod: postLastmods.get(item.url) }),
     }),
   ],
   i18n: {
