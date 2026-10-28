@@ -30,6 +30,22 @@ graph.add_node("tool", ToolGraph(self.config, self.emit).subgraph())
 graph.add_node("delivery", DeliveryGraph(self.config, self.emit).subgraph())
 ```
 
+You had a choice here, and the post would be dishonest not to say so. LangGraph will also let you call a graph from inside an ordinary node: `await other.ainvoke(...)`, no composition involved. That version is easier, and for a one-off it is the right call.
+
+The reason this codebase uses compiled subgraphs instead comes down to what you can see afterwards.
+
+| | graph invoked inside a node | compiled subgraph |
+| --- | --- | --- |
+| In the diagram | one box | expands inline with `xray` |
+| In a trace | one span | a span per inner node |
+| State | whatever you pass and return | its own schema, merged on return |
+| Reuse | a function call | added as a node by any parent |
+| Interrupts inside it | not reachable by a parent resume | reachable, if it shares the checkpointer |
+
+That last row is the one that forces the decision here rather than making it a preference: the approval gate lives two levels down, and a parent resume has to reach it. The rest is the difference between a black box and a white one.
+
+Reuse is the quieter benefit. `delivery` is composed by the support graph today and nothing stops another flow adding the same compiled object as a node, because it declares its own state and says nothing about who contains it.
+
 That is the whole composition story, and it is the part that works smoothly. The parent does not know what `delivery` does. It knows the name, and that control comes back afterwards.
 
 Expanded, the whole thing looks like this. It is the same export with `xray` on, which inlines each subgraph instead of drawing it as one box, and it is exactly what `/graphs` shows in the app. Each subgraph has its own start and finish, which matters more than it looks: those are what the early exits route to.
@@ -94,7 +110,12 @@ graph TD;
     delivery_screen -.-> delivery_send;
     delivery_send --> delivery_done;
     end
+    classDef blocking stroke-width:3px,stroke-dasharray:4 3;
+    class delivery_approval blocking;
+    class tool_gate blocking;
 ```
+
+A dashed, thicker outline marks a node that parks the run and waits for a person, and those two are the only places a run stops on its own. The marking is derived from each node's own source rather than a list, because a hand-kept list of which nodes block would go stale exactly here, in the picture most readers look at instead of the code.
 
 Four things are worth reading off it. `knowledge` contains a loop, search to refine and back, which is the bounded retry from earlier in this post. `tool` has a gate in the middle of it. `delivery` is reachable from two different places in the parent, which is why the approval logic lives there once rather than at each call site.
 
@@ -146,7 +167,19 @@ Read that failure mode carefully, because it is nastier than it sounds. Every dr
 
 ### The serializer has an allowlist, and deriving it matters
 
-Graph state holds Pydantic models, and they have to survive a round trip through the serializer. The set of permitted types is explicit:
+On the default serializer a resume hands your Pydantic models back as plain dicts, so `state.answer.content` works before an interrupt and raises `AttributeError` after one. That is the version of this most people meet, and I spent a while treating it as a law of the framework. It is a default. Configure the serializer and models come back as models:
+
+```python
+serde = JsonPlusSerializer(
+    allowed_msgpack_modules=[
+        (model.__module__, model.__name__) for model in CHECKPOINTED
+    ]
+)
+```
+
+There is no re-validation anywhere in this codebase as a result, and a test asserts it: `type(restored) is type(sample)` for every model a state can hold.
+
+What the allowlist replaces the dict problem with is quieter. Here is the list it is built from, and both comments on it are scars:
 
 ```python
 # Every model a graph state can hold. A missing one comes back as nothing rather
@@ -158,21 +191,11 @@ CHECKPOINTED: tuple[Any, ...] = (
 )
 ```
 
-Both comments are scars.
+**A type missing from that list does not raise. It comes back as nothing.** A router reads `state.decision`, finds `None`, and takes its fallback branch, so a resumed run quietly does something different from what it was doing before it parked, and it reads like the model made an odd choice rather than the serializer dropping a value. That is as close to an undebuggable bug as this codebase gets.
 
-A type missing from that list does not raise. It comes back as nothing. So a router reads `state.decision`, finds `None`, and takes its fallback branch, which means a resumed run quietly does something different from what it was doing before it parked. That is as close to an undebuggable bug as this codebase gets, and the only reason it is tractable is that the behavior is now written down where someone will read it.
+Which is why the list is **derived from the unions** rather than typed out. Somebody adds a member to a decision union, does not think about serialization, and one resume path breaks weeks later. Deriving it means the two cannot drift, and a second test walks every state annotation to check each model it can hold is listed.
 
-And the list is **derived from the unions** rather than typed out, because maintaining it by hand is what produced the problem in the first place. Somebody adds a member to a decision union, does not think about serialization, and a specific resume path breaks weeks later. Deriving it means the two cannot drift.
-
-### Everything comes back as a dict
-
-The one that bit hardest. A resume reloads state through the serializer, and Pydantic models arrive back as **plain dicts**. Your type annotation says `TicketAnswer`. At runtime, after a resume, it is a `dict`.
-
-Which means `state.answer.content` works perfectly before an interrupt and raises `AttributeError` after one. Type checkers cannot see it, because the annotation is honest about intent and wrong about runtime.
-
-The fix is unglamorous: re-validate at the boundary. This codebase has a small `_answer_of()` that takes whatever came back and returns a real model. The rule to carry: any model you read after an interrupt gets re-validated first. Write it on a sticky note, because you will add a field one day and reintroduce this.
-
-A related gotcha in the same area: the allowlist takes `(module, qualname)` pairs, not module names. Getting it wrong only warns today and is slated to start raising.
+One smaller trap in the same area: the allowlist takes `(module, qualname)` pairs, not module names. Getting it wrong only warns today and is slated to start raising.
 
 ## Interrupts: parking a run mid-flight
 
@@ -250,9 +273,32 @@ A reviewer can change the draft on the way through. The resumed run sends what t
 
 Rejection is also recorded as an outcome rather than silently dropping everything, and a rejected draft is deliberately never written to the ticket log, so a reply the customer never saw leaves no trace suggesting they did.
 
+### You do not always need this
+
+`interrupt()` is not the only way to pause, and for a lot of systems it is not the best one. The alternative is to end the run at a terminal state, persist what a resume would need, and start a fresh run that routes on it from the entry node. No checkpointer, no second store.
+
+I have built both. What each buys:
+
+| | `interrupt()` plus a checkpointer | terminal state, resume from the entry |
+| --- | --- | --- |
+| Stores that must agree | two | one |
+| Who writes the resume logic | the framework | you, per pause |
+| What survives | every channel value, automatically | what you deliberately persist |
+| Growth | per thread per super-step | one record, overwritten |
+| Where a pause may be | anywhere, including mid-node | only where the graph can cleanly end |
+| If the saved state will not load | you need a recovery path | discard it and carry on |
+
+That last row is the one I would weigh most, and it is the one I underrated. State you persist yourself can be thrown away when it no longer parses, and the conversation continues from the record. A checkpoint cannot, because the checkpoint **is** the run, so an unreadable one leaves an approval permanently unreachable unless you build the escape yourself. This codebase does now: a resume reads the thread first and drops it if it will not deserialize, which turns a stuck ticket into one the backend can propose again.
+
+So the rule, rather than a recommendation: **if every pause lands at a turn boundary, persist your own state and resume from an entry point.** You get one store, a stateless agent and bounded growth, and you give up nothing you were using. **If a pause lands mid-flight**, with real work and possibly a second pause behind it, take the checkpoint.
+
+This system has one of each. `delivery_approval` is a turn boundary in all but name, since only a send follows it. `tool_gate` is not: after it the tool runs, the parent writes a report, another model call drafts the answer, and delivery can park again at a different gate. The harder of the two sets the architecture, which is how it usually goes.
+
 ## Bounds belong together, not where they loop
 
-One more structural habit, which I did not have before this project. Every limit a run is subject to lives in one file, and the reason is in its first line:
+One more structural habit, and the only one here that has nothing to do with LangGraph. **A limit that constrains another limit has to be readable next to it, or nobody can check the arithmetic.** That is as true of timeouts against a client deadline, or pool sizes against a connection cap, as it is of anything below.
+
+The version of it in this codebase: every limit a run is subject to lives in one file, and the reason is in its first line:
 
 > A loop whose ceiling is written where it loops is a ceiling nobody can check against the others. These are together because they constrain each other: the recursion limit has to leave room for the worst case the retry limits allow.
 
