@@ -3,6 +3,7 @@ title: "Agent Graph Engineering, Part 2: Split the Services, and Know Where the 
 description: "Why the agent graph and the business logic belong in dedicated services, how to draw the line at state ownership rather than at layers, and the bug that taught me the thread a person reads and the thread a model remembers are not the same object."
 ogImage: ./_images/cover-02.png
 pubDatetime: 2026-10-12T09:00:00+07:00
+modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph
@@ -13,7 +14,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 2
 ---
 
-> **TL;DR** Put your product's domain in one service and your agent graph in another, and draw the line at state ownership rather than at anything that sounds like a layer. The agent owns execution state, which is a LangGraph checkpoint nobody can rebuild by hand. The backend owns the record, which is what a page reload needs. Updates travel one way, agent to backend, over a generated WebSocket client. The payoff is not tidiness, it is that a node is a function you can call with a state you invented, while the same decision inside a socket consumer needs a connection and a user before it will run at all.
+> **TL;DR** Put your product's domain in one service and your agent graph in another, and draw the line at state ownership rather than at anything that sounds like a layer. The agent owns execution state, the backend owns the record, and which of them *stores* a half-finished run is a separate question that [part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) answers differently from this post. Updates travel one way, agent to backend, over a generated WebSocket client. The payoff is not tidiness, it is that a node is a function you can call with a state you invented, while the same decision inside a socket consumer needs a connection and a user before it will run at all.
 
 [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) listed the stack and said, in one line, to keep business logic out of the agent. That line does a lot of work and deserves its own post, because it is the decision that is nearly free this month and expensive in a year, and because "split it into two services" is useless advice until somebody tells you where the cut goes.
 
@@ -43,7 +44,7 @@ async def test_knowledge_base_branch_grounds_the_answer() -> None:
     with mock_openai(CLASSIFY, SEARCH_KB, ANSWER_FROM_KB) as route:
         state = (
             await SupportGraph()
-            .compile(checkpointer())
+            .compile()
             .ainvoke({"context": ticket()}, config=config(thread))
         )
 
@@ -64,7 +65,9 @@ The instinct is to split by technology or by layer: an API tier, a service tier,
 
 What is actually different is the kind of state each one holds.
 
-The agent owns execution state: which node runs next, the current channel values, the payload of a pending interrupt. In LangGraph that is a checkpoint, and it lives in Postgres. The important property is that you cannot rebuild it by hand. If you lose a checkpoint, you have not lost a row you could recompute from other rows. You have lost the ability to resume, because reconstructing it means reimplementing LangGraph's execution model, and you are not going to do that. Resumption is the whole mechanism behind human approval, so this state is load-bearing in a way ordinary application state is not.
+The agent owns execution state: which node runs next, the current channel values, what a gate is holding. In LangGraph that can be a checkpoint, living in Postgres on the agent's side, and that is how this started. The important property I thought I was buying is that you cannot rebuild it by hand: lose a checkpoint and you have not lost a row you could recompute from other rows, you have lost the ability to resume, because reconstructing it means reimplementing LangGraph's execution model.
+
+That turned out to be the argument for keeping it on the agent and also the argument against. [Part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) is where I take it apart and move the state across, which leaves this service boundary where it is and changes who stores what. Read the rest of this section as the question rather than the answer: the question is what each service owns, and it is the right question either way.
 
 The backend owns the record: messages, ticket events, and the two things a page reload needs to find, which are a drafted reply waiting for approval and a proposed tool call. None of those are copies of graph state. They exist because a browser cannot ask the agent what is currently waiting, and because a stored approval row is what lets the approval card come back after a refresh.
 
@@ -75,7 +78,7 @@ In the reference implementation it comes out as three services:
 | Service    | Owns                                            | Port |
 | ---------- | ----------------------------------------------- | ---- |
 | `backend/` | users, tickets, the thread as a person reads it | 8000 |
-| `agent/`   | graphs, tools, checkpoints, the model's memory  | 8001 |
+| `agent/`   | graphs, tools, the model's memory               | 8001 |
 | `web/`     | nothing; it renders what the other two generate | 5173 |
 
 Three services and four processes, because a run is driven by a worker rather than by whichever web process accepted the request. That worker is the backend's own code pulling from a queue, so it owns nothing the table does not already list.
@@ -94,7 +97,7 @@ The other is the thread as the model remembers it, which in Pydantic AI is its o
 
 I first gave that model memory its own table, filled by a background job once the message itself had been saved. Two copies of one thread, written by two processes at two different times, which is the shape of a problem whether or not you have hit it yet. The gap between those writes is not a rare crash window either, which is what I had told myself. It is ordinary operation: the job queues, it retries, occasionally it does not arrive, and the write that already succeeded neither knows nor cares. When the two disagreed, neither had been derived from the other, so neither could be rebuilt. There was no correct recovery, only a choice about which copy to believe.
 
-The fix was to stop treating it as a second source of truth. The model's memory now rides on the graph's state, so the checkpointer that already persists a parked run persists the memory too. One write, one thing to lose. And when a lane has nothing remembered yet, it starts from the record the backend sends, which quietly turns the memory into a cache over the record rather than a peer of it. Lose a checkpoint now and what you lose is the shape of past tool calls, not the conversation.
+The fix was to stop treating it as a second source of truth. The model's memory now rides on the graph's state, so whatever persists a half-finished run persists the memory with it. One write, one thing to lose. And when a lane has nothing remembered yet, it starts from the record the backend sends, which quietly turns the memory into a cache over the record rather than a peer of it. Lose it now and what you lose is the shape of past tool calls, not the conversation.
 
 That is the test I would apply to any state you are tempted to put on the agent side. If losing it means losing data, it belongs in the record. If losing it only means losing speed or fidelity, the agent can keep it.
 

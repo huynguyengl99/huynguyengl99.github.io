@@ -3,6 +3,7 @@ title: "Agent Graph Engineering, Part 1: The Stack, and Why Each Piece Is There"
 description: "The stack for building a typed, observable, controllable agent graph: Pydantic AI, LangGraph, chanx, OpenTelemetry, pytest and evals. What each piece buys you, what it costs, the architecture we build across the series, and the full series map."
 ogImage: ./_images/cover-01.png
 pubDatetime: 2026-10-08T10:00:00+07:00
+modDatetime: 2026-10-29T03:10:00+07:00
 featured: true
 tags:
   - ai-agents
@@ -21,7 +22,7 @@ import SeriesMap from "@/components/SeriesMap.astro";
 
 [Part 0](/posts/agent-graph-engineering/before-it-had-a-name/) was the story: years of shipping LLM features as intent detection plus nested conditionals, and why observability tooling never fixed the underlying problem. This post is the pragmatic half.
 
-> One clarification first, because the word is overloaded. This series is about the _execution_ graph of an agent: state, nodes, edges, routing, interrupts, resumption. It is not graph RAG, and not knowledge graphs. Those are retrieval techniques, where a graph is the data you query. Graph RAG could sit behind one node here as one tool among several. Same word, different concept, and that collision is a large part of why there is so little material on this subject.
+> One clarification first, because the word is overloaded. This series is about the _execution_ graph of an agent: state, nodes, edges, routing, stopping for a person, carrying on afterwards. It is not graph RAG, and not knowledge graphs. Those are retrieval techniques, where a graph is the data you query. Graph RAG could sit behind one node here as one tool among several. Same word, different concept, and that collision is a large part of why there is so little material on this subject.
 
 ## Table of contents
 
@@ -37,7 +38,7 @@ The reason is not elegance. It is that declared structure can be rendered, valid
 
 The case for each piece is below. Before that, the reasons you might care beyond whatever you are shipping this week, because I think there are three different readers here.
 
-If your team already runs an agent in production, you do not need convincing that it is hard. The useful part is the set of practices that remove whole categories of bug rather than fixing them one at a time. Typed tool arguments turn a wrong type into a validation error at the edge instead of a `TypeError` three frames into your own code. Structured output means you route on `isinstance` rather than on whether the response happened to contain the word "escalate". Generated contracts mean a message shape cannot drift between two codebases without the compiler noticing. Checkpointing means a crashed run resumes instead of vanishing. Guardrails at both edges mean the text you screened is the text that ships. Evals mean a model upgrade is a measurement rather than a gamble. None of those are features you gain. They are bugs you stop having, which is a different and better thing.
+If your team already runs an agent in production, you do not need convincing that it is hard. The useful part is the set of practices that remove whole categories of bug rather than fixing them one at a time. Typed tool arguments turn a wrong type into a validation error at the edge instead of a `TypeError` three frames into your own code. Structured output means you route on `isinstance` rather than on whether the response happened to contain the word "escalate". Generated contracts mean a message shape cannot drift between two codebases without the compiler noticing. Durable run state means a crashed run carries on instead of vanishing. Guardrails at both edges mean the text you screened is the text that ships. Evals mean a model upgrade is a measurement rather than a gamble. None of those are features you gain. They are bugs you stop having, which is a different and better thing.
 
 If you are about to build your first one, the useful part is the order. These decisions are sequenced the way they actually bite, and the one that is cheap this month and expensive next year is the service split, which is why it turns up early rather than in a footnote. Reading ahead costs an afternoon and might save you a rewrite.
 
@@ -55,7 +56,7 @@ The sentence that keeps turning up in hiring write-ups is that a demo agent is e
 | -------------- | ---------------------- | -------------------------------------------------------------------------------------------------- |
 | Language       | Python                 | The only ecosystem where every provider, every serving runtime, and every eval tool shows up first |
 | Agent          | Pydantic AI            | Typed tools, typed outputs, typed deps, provider independence                                      |
-| Flow           | LangGraph              | Declared graph, renderable diagram, inspectable state, checkpointing                               |
+| Flow           | LangGraph              | Declared graph, renderable diagram, inspectable state, a run that can stop and resume              |
 | Transport      | chanx                  | Typed WebSocket messages, broadcast from anywhere, generated AsyncAPI contract                     |
 | Tracing        | OpenTelemetry          | One connected trace per user message, readable with no account and exportable to any OTLP backend  |
 | Tests          | pytest + mocked LLM    | Fast, deterministic, no API spend                                                                  |
@@ -94,7 +95,7 @@ This is the piece that changes how you work, and the piece your team will push b
 
 - **A diagram from the code.** LangGraph exports Mermaid. Your architecture picture is generated from the thing that actually runs, so it cannot go stale. No more hand-drawn draw.io files that lie.
 - **Inspectable state at every step.** You can see what the state was going into a node and coming out. When something breaks, you know which transition did it rather than guessing.
-- **Checkpointing.** Graph state persists. A run can be paused, resumed, and recovered after a crash, which is also the mechanism that makes human-in-the-loop approvals work rather than being a bolt-on.
+- **A run you can stop and pick up.** The state is one value you can write down, so a run can wait for a person and carry on later, in another process, which is what makes human-in-the-loop approvals part of the graph rather than a bolt-on. LangGraph will store that for you; [part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) is about why this codebase ended up storing it elsewhere.
 - **Structure that survives change.** Adding a capability means adding a node and an edge, not threading another condition through an existing chain.
 
 The honest downsides: it is a LangChain-ecosystem library, so some of the ergonomics assume LangChain; and streaming from non-LangChain code goes through a generic custom channel, which is the gap chanx fills.
@@ -167,15 +168,15 @@ flowchart LR
     BE -->|"typed WS<br/>AsyncAPI"| AG
 
     BE --- BEOWNS[["users, tickets,<br/>the thread a person reads"]]
-    AG --- AGOWNS[["graphs, tools, checkpoints,<br/>the thread a model remembers"]]
+    AG --- AGOWNS[["graphs, tools,<br/>the thread a model remembers"]]
 
     classDef owns fill:none,stroke-dasharray:4 3;
     class BEOWNS,AGOWNS owns;
 ```
 
-Three services, one repository. The frontend generates its clients from OpenAPI and AsyncAPI. The backend owns users, tickets, and history. The agent service owns the graphs, the tools, and the checkpoints, and talks to nobody's database but its own.
+Three services, one repository. The frontend generates its clients from OpenAPI and AsyncAPI. The backend owns users, tickets, and history. The agent service owns the graphs and the tools, and talks to nobody's database but its own.
 
-It is small enough to read in an afternoon and complete enough to adopt: generated contracts on both boundaries, real WebSocket worker processes, approval interrupts on irreversible tools, guardrails on the input and output edges, streamed progress, a span per graph node with per-run cost, three test suites that spend nothing, evals against real providers, and container images serving ASGI. The architecture is production-grade and the deployment is production-shaped. What it does not do yet, context budgeting and spend caps among others, is written down in the repo rather than glossed over, and the last post walks that gap. Every post is pinned to a tag so you can check out the exact state being described.
+It is small enough to read in an afternoon and complete enough to adopt: generated contracts on both boundaries, real WebSocket worker processes, approval gates on irreversible tools, guardrails on the input and output edges, streamed progress, a span per graph node with per-run cost, three test suites that spend nothing, evals against real providers, and container images serving ASGI. The architecture is production-grade and the deployment is production-shaped. What it does not do yet, context budgeting and spend caps among others, is written down in the repo rather than glossed over, and the last post walks that gap.
 
 ## The series map
 
@@ -183,7 +184,7 @@ Each post stands alone, so you can start wherever your current problem is rather
 
 <SeriesMap series="Agent Graph Engineering" current="the-stack-and-why-each-piece-is-there" />
 
-Post 6 is the one I expect to be most useful. State that survives a pause, and a run that resumes into the middle of itself, are the hardest parts in practice and the least written about anywhere. The ordering inside it is not negotiable either: persistence has to come before interrupts, because an interrupt only works at all because the checkpointer exists.
+Post 6 is the one I expect to be most useful. State that survives a pause, and a run that picks back up afterwards, are the hardest parts in practice and the least written about anywhere. It is also the one where I changed my mind in public: I shipped it on LangGraph interrupts and a checkpointer, then took both out, and the post is the comparison rather than the conclusion.
 
 ## What it costs
 

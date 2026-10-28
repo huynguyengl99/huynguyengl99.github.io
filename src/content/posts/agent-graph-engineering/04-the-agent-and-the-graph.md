@@ -3,6 +3,7 @@ title: "Agent Graph Engineering, Part 4: The Agent and the Graph"
 description: "A typed model call and the flow that routes it, taught together because they compose. Why the agent's output type is also your routing table, how a node declares its own legal moves, and what replaces the if/else on an intent classifier."
 ogImage: ./_images/cover-04.png
 pubDatetime: 2026-10-20T09:00:00+07:00
+modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph
@@ -219,7 +220,7 @@ Two things here that I would not have designed on the first attempt.
 
 The audience is not a field. It lives on the context, and the branches that only apply to a customer read it. The alternative, which I did try, is two graphs: one for customers and one for the team. They diverged, then they diverged differently, and the shared parts had to be fixed twice. One graph with an audience on the context is smaller and the differences are visible as guards rather than hidden as duplication.
 
-And `messages_json` is a string rather than a list of message objects, with a comment explaining why: the serializer that persists graph state allows types by name, and a type it does not know comes back as nothing. Storing the model's own message history as an opaque blob means it survives a checkpoint round-trip intact. That is a concession to persistence, and persistence is post 6.
+And `messages_json` is a string rather than a list of message objects, with a comment explaining why: graph state has to survive being written down and read back, and a dozen of the model library's own classes travelling through that round trip is a dozen things to get right. Storing the message history as one opaque blob, written and read by the library that owns it, means it comes back intact whatever is doing the storing. That is a concession to persistence, and persistence is post 6.
 
 The `Annotated[str, remembered]` is a reducer, which is how you say what happens when two updates write the same channel. Most fields just overwrite. A few need to accumulate or to keep what was already there. That mechanism is the thing that most repays reading the docs properly.
 
@@ -231,7 +232,7 @@ The honest version, because [Part 1](/posts/agent-graph-engineering/the-stack-an
 | --- | --- | --- | --- |
 | Lines for the same behavior | fewest | few | most |
 | Can be drawn from the code | no | no | yes, exported from the compiled object |
-| Pause for a person, resume later | build it yourself | build it yourself | falls out of checkpointing |
+| Pause for a person, resume later | build it yourself | build it yourself | a node you can stop at and route back into |
 | Per-step trace | whatever you log | whatever you log | a span per node, free |
 | Test one decision | needs the surrounding call path | needs the surrounding call path | call the node with a state you invented |
 | Adding a branch | another condition in an existing chain | another condition in an existing chain | a node and an edge |

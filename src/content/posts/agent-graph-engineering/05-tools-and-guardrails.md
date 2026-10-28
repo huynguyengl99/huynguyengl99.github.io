@@ -3,6 +3,7 @@ title: "Agent Graph Engineering, Part 5: Tools and Guardrails"
 description: "What the model may do, and what it may say. Structured tool errors you raise instead of return, at-most-once execution for actions you cannot undo, and why the guardrail that works is demarcation rather than detection."
 ogImage: ./_images/cover-05.png
 pubDatetime: 2026-10-20T10:00:00+07:00
+modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph
@@ -118,13 +119,15 @@ One more rule worth stating: **a parameter with a closed set of values should be
 
 This is the part I would most want someone to read before putting a refund behind an agent.
 
-LangGraph checkpoints **after** a node returns. So a process killed in the middle of a node re-runs that whole node on resume. If the node issued a refund, it issues a second one.
+A process killed mid-refund refunds again when the work comes back. Whatever holds the half-finished run holds the state it *started* from, so the retry re-enters the graph and arrives at the refund node a second time. If the node issued a refund, it issues another one.
 
 The codebase says this plainly, and says how it knows:
 
-> A crash inside a node re-runs that node on resume: LangGraph only checkpoints after a node returns, so a process killed mid-refund refunds again when it comes back. Verified, not assumed.
+> A process killed mid-refund refunds again when the work comes back. The state the backend holds is the one the run started from, so a redelivered decision re-enters the graph and reaches the refund node a second time. Verified, not assumed.
 
-The fix is a ledger. Before an irreversible call, claim it. After it returns, record it. The key is `thread` plus LangGraph's `checkpoint_ns`, which is stable across the re-run, so the same logical execution gets the same key even after a restart, and it lives in the same Postgres the checkpoints do so there is no second system to keep consistent.
+The fix is a ledger. Before an irreversible call, claim it. After it returns, record it. The key is the run plus the node, which is stable across the retry, so the same logical execution gets the same key even after a restart, and it lives in the agent's own Postgres so the claim survives the process that made it.
+
+That quote is worth a note, because it changed. It used to blame LangGraph checkpointing after a node returns, which was true of the design then. [Part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) replaced that design and the sentence had to be rewritten, and the ledger did not: the retry arrives by a different road and lands in the same place. Which is the useful thing to notice. A guard worth having does not depend on which mechanism brings the second attempt.
 
 And then the part that makes it trustworthy:
 
