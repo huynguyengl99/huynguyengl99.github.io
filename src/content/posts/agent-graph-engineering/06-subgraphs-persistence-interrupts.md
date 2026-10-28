@@ -32,19 +32,21 @@ graph.add_node("delivery", DeliveryGraph(self.config, self.emit).subgraph())
 
 You had a choice here, and the post would be dishonest not to say so. LangGraph will also let you call a graph from inside an ordinary node: `await other.ainvoke(...)`, no composition involved. That version is easier, and for a one-off it is the right call.
 
-The reason this codebase uses compiled subgraphs instead comes down to what you can see afterwards.
+The difference between the two is the difference between a black box and a white one, and that is the whole decision.
 
-| | graph invoked inside a node | compiled subgraph |
+| | **black box**: invoked inside a node | **white box**: a compiled subgraph |
 | --- | --- | --- |
 | In the diagram | one box | expands inline with `xray` |
 | In a trace | one span | a span per inner node |
 | State | whatever you pass and return | its own schema, merged on return |
 | Reuse | a function call | added as a node by any parent |
-| Interrupts inside it | not reachable by a parent resume | reachable, if it shares the checkpointer |
+| Interrupts inside it | unreachable by a parent resume | reachable, if it shares the checkpointer |
 
-That last row is the one that forces the decision here rather than making it a preference: the approval gate lives two levels down, and a parent resume has to reach it. The rest is the difference between a black box and a white one.
+Five of those rows are about whether you can see inside the thing after it runs. A black box is fine until you have to explain why a run did what it did, at which point it is one node in the picture and one span in the trace and you are back to reading code.
 
-Reuse is the quieter benefit. `delivery` is composed by the support graph today and nothing stops another flow adding the same compiled object as a node, because it declares its own state and says nothing about who contains it.
+The last row is the one that forces the decision here rather than leaving it to taste. The approval gate lives two levels down and a parent resume has to reach it, which a black box cannot offer at all.
+
+Reuse is the quieter benefit. `delivery` is composed by the support graph today, and nothing stops another flow adding the same compiled object as a node, because it declares its own state and says nothing about who contains it.
 
 That is the whole composition story, and it is the part that works smoothly. The parent does not know what `delivery` does. It knows the name, and that control comes back afterwards.
 
