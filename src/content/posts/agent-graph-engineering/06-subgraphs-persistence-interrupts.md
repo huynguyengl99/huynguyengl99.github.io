@@ -1,8 +1,9 @@
 ---
-title: "Agent Graph Engineering, Part 6: Subgraphs, Persistence, and Interrupts"
-description: "How a run pauses for a human and resumes into the middle of itself. Subgraphs compiled without their own checkpointer, why execution state is not your business record, the serializer that hands back dicts, and the detail that makes an approval survive a different socket."
+title: "Agent Graph Engineering, Part 6: Subgraphs, and a Run That Stops for a Person"
+description: "How a run stops to wait for a human and picks back up later. Subgraphs as white boxes, why execution state is not your business record, and the trade I got wrong first: I shipped this on LangGraph interrupts and a Postgres checkpointer, then tore both out."
 ogImage: ./_images/cover-06.png
 pubDatetime: 2026-10-28T07:42:00+07:00
+modDatetime: 2026-10-28T20:20:00+07:00
 tags:
   - ai-agents
   - langgraph
@@ -12,11 +13,11 @@ series: "Agent Graph Engineering"
 seriesOrder: 6
 ---
 
-> **TL;DR** These three are one mechanism, not three topics. A subgraph is a compiled graph used as a node, and it must be compiled **without** its own checkpointer so a resume can reach an interrupt one level down. Persistence holds execution state, which is not your business record and cannot be rebuilt by hand. An interrupt parks a run mid-flight, and it only works because the checkpoint exists. The details that cost me the most: a resume hands Pydantic models back as plain dicts, and a subgraph's writes do not reach its parent until it returns, so anything the reviewer needs has to ride the interrupt itself.
+> **TL;DR** Composing is the easy half: a subgraph is a compiled graph used as a node, it declares its own state, and only a parent can route after it. Stopping for a human is the hard half, and I got it wrong the first time. I built it on `interrupt()` and a Postgres checkpointer, which works and is what the docs show. Then a reader asked why the agent needed a database at all, I could not answer it well, and tearing both out took a day and left the system smaller: a gate now **ends** its subgraph, the whole state goes back to the caller, and the decision arrives as a new run carrying it. Two durable copies of a thread became one. Three bugs fell out of the switch, and one of them refunded money twice.
 
-This is the post I would have wanted most, and the reason is simple. Everything up to here you could have worked out from the docs in an afternoon. This part I learned by getting it wrong in production, and the failures were quiet.
+This is the post I would have wanted most, and the reason is simple. Everything up to here you could have worked out from the docs in an afternoon. This part I learned by getting it wrong, shipping the wrong thing, and then having to explain it to somebody.
 
-They are in one post because they are one capability. A graph that can pause for a human needs state that outlives the request, which is persistence. A flow large enough to need pausing is large enough to need composing, which is subgraphs. And the pausing itself has rules that only make sense once you know how the other two work. Teaching them separately means explaining the same mechanism three times with two thirds of it missing.
+They are in one post because they are one capability. A flow large enough to need a human in it is large enough to need composing, which is subgraphs. Where a half-finished run lives between the two halves of a turn is the other question, and it is the one with an actual decision in it.
 
 ## Table of contents
 
@@ -40,17 +41,17 @@ The difference between the two is the difference between a black box and a white
 | In a trace | one span | a span per inner node |
 | State | whatever you pass and return | its own schema, merged on return |
 | Reuse | a function call | added as a node by any parent |
-| Interrupts inside it | unreachable by a parent resume | reachable, if it shares the checkpointer |
+| Where it stopped | inside a function you have to read | a node, with a name, on the picture |
 
-Five of those rows are about whether you can see inside the thing after it runs. A black box is fine until you have to explain why a run did what it did, at which point it is one node in the picture and one span in the trace and you are back to reading code.
+Every row is about whether you can see inside the thing after it runs. A black box is fine until you have to explain why a run did what it did, at which point it is one node in the picture and one span in the trace and you are back to reading code.
 
-The last row is the one that forces the decision here rather than leaving it to taste. The approval gate lives two levels down and a parent resume has to reach it, which a black box cannot offer at all.
+The last row carried the most weight for me, and it did not look that way at first. Somewhere in here a run stops and waits for a person, and "where" is the first question anyone asks about it, including me six months later.
 
 Reuse is the quieter benefit. `delivery` is composed by the support graph today, and nothing stops another flow adding the same compiled object as a node, because it declares its own state and says nothing about who contains it.
 
 That is the whole composition story, and it is the part that works smoothly. The parent does not know what `delivery` does. It knows the name, and that control comes back afterwards.
 
-Expanded, the whole thing looks like this. It is the same export with `xray` on, which inlines each subgraph instead of drawing it as one box, and it is exactly what `/graphs` shows in the app. Each subgraph has its own start and finish, which matters more than it looks: those are what the early exits route to.
+Expanded, the whole thing looks like this. It is the same export with `xray` on, which inlines each subgraph instead of drawing it as one box, and it is exactly what `/graphs` serves in the app. Each subgraph has its own start and finish, which matters more than it looks: those are what the early exits route to.
 
 ```mermaid
 graph TD;
@@ -68,13 +69,16 @@ graph TD;
     support_decide -.-> knowledge_start;
     support_decide -.-> support_escalate;
     support_decide -.-> support_respond;
-    support_decide -.-> tool_plan;
-    support_escalate -.-> delivery_screen;
+    support_decide -.-> tool_start;
+    support_escalate -.-> delivery_start;
     support_report_tool -.-> support_respond;
     support_respond -.-> finish;
-    support_respond -.-> delivery_screen;
+    support_respond -.-> delivery_start;
     support_start -.-> support_classify;
     support_start -.-> support_decide;
+    support_start -.-> tool_start;
+    support_start -.-> delivery_start;
+    tool_done -.-> finish;
     tool_done -.-> support_report_tool;
     tool_done -.-> support_respond;
     delivery_done --> finish;
@@ -89,87 +93,113 @@ graph TD;
     knowledge_search -.-> knowledge_refine;
     end
     subgraph tool
+    tool_start(start)
     tool_plan(tool_plan)
     tool_gate(tool_gate)
+    tool_await(tool_await)
     tool_execute(tool_execute)
     tool_done(finish)
-    tool_gate -.-> tool_done;
-    tool_gate -.-> tool_execute;
+    tool_start -.-> tool_done;
+    tool_start -.-> tool_execute;
+    tool_start -.-> tool_plan;
     tool_plan -.-> tool_done;
     tool_plan -.-> tool_execute;
     tool_plan -.-> tool_gate;
+    tool_gate -.-> tool_await;
+    tool_await --> tool_done;
     tool_execute --> tool_done;
     end
     subgraph delivery
+    delivery_start(start)
     delivery_screen(delivery_screen)
     delivery_approval(delivery_approval)
+    delivery_await(delivery_await)
     delivery_send(delivery_send)
     delivery_done(finish)
-    delivery_approval -.-> delivery_done;
-    delivery_approval -.-> delivery_send;
+    delivery_start -.-> delivery_done;
+    delivery_start -.-> delivery_screen;
+    delivery_start -.-> delivery_send;
     delivery_screen -.-> delivery_done;
     delivery_screen -.-> delivery_approval;
     delivery_screen -.-> delivery_send;
+    delivery_approval -.-> delivery_await;
+    delivery_await --> delivery_done;
     delivery_send --> delivery_done;
     end
     classDef blocking stroke-width:3px,stroke-dasharray:4 3;
-    class delivery_approval blocking;
-    class tool_gate blocking;
+    class delivery_await blocking;
+    class tool_await blocking;
 ```
 
-A dashed, thicker outline marks a node that parks the run and waits for a person, and those two are the only places a run stops on its own. The marking is derived from each node's own source rather than a list, because a hand-kept list of which nodes block would go stale exactly here, in the picture most readers look at instead of the code.
+A dashed, thicker outline marks a node where the run stops and waits for a person, and those two are the only places that happens. The marking is derived from each node's own source rather than from a list, because a hand-kept list of which nodes stop would go stale exactly here, in the picture most readers look at instead of the code.
 
-Four things are worth reading off it. `knowledge` contains a loop, search to refine and back, which is the bounded retry from earlier in this post. `tool` has a gate in the middle of it. `delivery` is reachable from two different places in the parent, which is why the approval logic lives there once rather than at each call site.
+Four things are worth reading off it. `knowledge` contains a loop, search to refine and back, which is the bounded retry further down this post. `tool` has a gate in the middle of it. `delivery` is reachable from three different places in the parent, which is why the approval logic lives there once rather than at each call site.
 
-And every subgraph can reach its own finish early. `tool_plan` can stop without running anything, `tool_gate` can stop instead of executing, and `delivery_screen` and `delivery_approval` can both end without sending. Those edges are the rejections, and they are the reason a subgraph needs a finish of its own rather than always handing control back with a result.
+And every subgraph can reach its own finish early. `tool_plan` can stop without running anything, the gate ends the subgraph instead of executing, and `delivery_screen` can end without sending. Those edges are the rejections and the stops, and they are the reason a subgraph needs a finish of its own rather than always handing control back with a result.
 
-### The detail that breaks everything
-
-Here is the helper that produces those subgraphs. The thing that took me longest to find is what is missing from it:
-
-```python
-def subgraph(self) -> CompiledStateGraph[Any, Any, Any, Any]:
-    """Compiled for a parent to add as a node: it shares the parent's
-    checkpointer, so a resume reaches an interrupt one level down."""
-    return self.build().compile()
-```
-
-A compiled graph can have a checkpointer. A subgraph must not. If you give a subgraph its own, it checkpoints into its own thread, and the parent's resume has no idea the child is parked. The approval interrupt lives inside the delivery subgraph, two levels down from the entry point, and it is only reachable on resume because the entire tree shares the parent's checkpointer.
-
-The symptom when you get this wrong is not an exception. It is a run that parks, a reviewer who clicks approve, and nothing happening. Which is exactly the kind of bug that eats a day, because every individual piece looks correct in isolation.
+Notice also that every subgraph's own `start` has conditional edges out of it. That is not decoration, and the rest of this post is mostly about why.
 
 ### A parent routes after a subgraph
 
-The other structural rule: a subgraph cannot say where its parent goes next. [Part 4](/posts/agent-graph-engineering/the-agent-and-the-graph/) showed nodes returning `Command[Literal[...]]` to name their own destination. A subgraph has no such power, because it does not know the parent's topology.
+The structural rule that bites first: a subgraph cannot say where its parent goes next. [Part 4](/posts/agent-graph-engineering/the-agent-and-the-graph/) showed nodes returning `Command[Literal[...]]` to name their own destination. A subgraph has no such power, because it does not know the parent's topology.
 
-So the parent does it, which is why this codebase has a separate routing function with a comment saying precisely that:
+So the parent does it, which is why this codebase has a separate routing function:
 
 ```python
 def route_after_tool(self, state: SupportState) -> str:
-    """... not a `Command` because only a parent can route after a subgraph."""
+    """A method rather than a `Command`, because only a parent can route
+    after a subgraph.
+
+    A gate inside the subgraph ends the run rather than suspending it, so
+    the parent has to notice: carrying on here would report and answer a
+    tool call that has not happened yet.
+    """
+    if state.awaiting is not Resuming.NOTHING:
+        return "__end__"
+    # A planner finding no tool is not a tool call.
+    return "support_report_tool" if state.tool else "support_respond"
 ```
 
-That is worth internalising as a design constraint rather than a quirk. Subgraphs are reusable _because_ they are ignorant of who called them. The price of that reuse is that the caller owns the transition.
+Worth internalising as a design constraint rather than a quirk. Subgraphs are reusable _because_ they are ignorant of who called them. The price of that reuse is that the caller owns the transition.
 
-## Persistence: the state you cannot rebuild
+That second paragraph of the docstring is a bug I wrote, and I will come back to it.
 
-The checkpointer's own docstring makes the distinction that [Part 2](/posts/agent-graph-engineering/split-the-services/) argued for:
+## Two kinds of state, and only one of them is yours
 
-> This is not the business record. The backend's Postgres rows are what the customer sees; this holds the _execution_ state: which node runs next, the channel values, the pending interrupt payload. Rebuilding that by hand would mean reimplementing LangGraph's execution model, and resume is the only reason the approval gate works at all.
+Before the interesting part, the distinction [Part 2](/posts/agent-graph-engineering/split-the-services/) argued for, because everything below depends on it.
 
-Two services, two kinds of state. The record is derived and can be recomputed. Execution state cannot, and losing it means losing the ability to continue.
+The **business record** is what a person reads: the ticket, the messages, who said what. It is derived, it can be recomputed, and the backend owns it.
 
-### In-memory is a trap, so it is opt-in
+The **execution state** is which node runs next, the channel values, what the gate is holding. It is not a record of anything. Nobody reads it. Its only purpose is to let a half-finished run carry on.
 
-LangGraph ships an in-memory saver and it is the obvious default while developing. The docstring explains why it is not the default here:
+Those are genuinely different, and conflating them is how you end up writing a resume by hand against a half-remembered graph. What is *not* obvious, and what I had wrong, is where the second one has to live.
 
-> In memory it survives a reconnect but not a restart, which means a deploy silently drops every reply waiting on a reviewer. So Postgres is the default and the in-memory saver is opt-in, announced loudly when it happens.
+## Where a stopped run lives
 
-Read that failure mode carefully, because it is nastier than it sounds. Every draft waiting for a human disappears on deploy. No error. No log line, unless you wrote one. Customers simply never get the reply somebody approved, and nobody notices until one of them asks again. The in-memory saver is correct for tests and actively dangerous anywhere else, so it announces itself when selected.
+LangGraph's answer is `interrupt()` and a checkpointer, and it is a good answer. The node calls `interrupt()`, the graph writes a checkpoint, the call stack unwinds, and the process is free. A resume delivers a value and execution continues from inside that function as though it had never stopped. Mid-node, mid-subgraph, anywhere.
 
-### The serializer has an allowlist, and it is a deadline
+That is what I shipped. It worked. The gate is two levels down from the entry point and a resume reached it correctly, which it does only because the whole tree shares the parent's checkpointer: give a subgraph its own and it checkpoints into its own thread, the parent's resume has no idea the child is waiting, and the symptom is not an exception but a reviewer clicking approve and nothing at all happening.
 
-Graph state holds Pydantic models and they have to survive a round trip through the serializer. Today, on the defaults, they do. Save a `RunTool` and a resume hands you back a `RunTool`. What you also get is this, every time:
+Then somebody read the repo and asked why the agent needed its own Postgres. I gave an answer about fast recovery and mid-node resumption, went to check it, and found that neither applied here. `delivery_approval` preserves no local variables worth resuming into. One entry router handles both gates. I was defending a mechanism, not a requirement.
+
+Here is the comparison I should have drawn before writing the first version:
+
+| | `interrupt()` plus a checkpointer | end the run, resume from the entry |
+| --- | --- | --- |
+| Durable copies of one thread | two | one |
+| Who writes the resume | the framework | you, once per gate |
+| What survives | every channel value, automatically | what you deliberately hand back |
+| Growth | per thread per super-step | one record, overwritten |
+| Where a stop may be | anywhere, including mid-node | only where the graph can cleanly end |
+| Serialization | the framework's format and its allowlist | your own, usually JSON |
+| Agent processes | the one holding the thread | any of them |
+| If the saved state will not load | you need a recovery path | discard it and carry on |
+
+The row I underrated is the first one. Two durable copies of one thread is not a performance cost, it is a correctness cost, and it shows up in the quietest way possible: the backend knows a reply is waiting for approval, the agent knows a run is parked, and nothing enforces that those two agree. A deploy, a reset, a thread that will not deserialize, and the browser shows a card whose run no longer exists. I built the escape hatch for that, which is a sentence I should have read as a warning rather than as progress.
+
+The last row has the same shape. State you hand back can be thrown away when it no longer parses, and the conversation continues from the record. A checkpoint cannot be thrown away, because the checkpoint **is** the run.
+
+And the serialization row turned out to be a live deadline rather than a theoretical one. Graph state holds Pydantic models, and today, on the defaults, they survive the round trip. What you also get is this, on every single resume:
 
 ```
 Deserializing unregistered type assistant.outputs.support.RunTool from
@@ -178,7 +208,7 @@ LANGGRAPH_STRICT_MSGPACK=true to block now, or add to
 allowed_msgpack_modules to allow explicitly.
 ```
 
-That is a deadline written as a warning, and it is worth understanding before it arrives rather than after. Turn strict mode on, which is what a future version will do for you, and an unregistered model stops being a model:
+Turn strict mode on, which is what a future version does for you, and an unregistered model stops being a model:
 
 ```python
 # LANGGRAPH_STRICT_MSGPACK=true, type not allow-listed
@@ -186,137 +216,156 @@ That is a deadline written as a warning, and it is worth understanding before it
 #             ^ a plain dict, not a RunTool
 ```
 
-So `state.decision` is a `dict`, `isinstance(decision, RunTool)` is `False`, and a router falls through to the branch it takes when it has no decision. A resumed run quietly does something different from what it was doing before it parked. No exception, one log line, and the symptom reads like the model made an odd choice.
+So `isinstance(decision, RunTool)` is `False`, and a router falls through to the branch it takes when it has no decision. A resumed run quietly does something different from what it was doing before it stopped. No exception, one log line, and the symptom reads like the model made an odd choice. The fix is an allowlist of `(module, qualname)` pairs derived from the unions rather than typed out by hand, and I wrote that, and it is fine, and it is also a format I do not control being load-bearing in the one code path that handles money.
 
-The allowlist is how you opt out of that, now rather than on the day the default flips:
+So I moved it. The agent is stateless between requests now.
+
+## What that actually looks like
+
+Two fields, shared by every graph:
 
 ```python
-serde = JsonPlusSerializer(
-    allowed_msgpack_modules=[
-        (model.__module__, model.__name__) for model in CHECKPOINTED
-    ]
+class Resuming(StrEnum):
+    """Which pause this run is picking up, if any.
+
+    A run ends at a gate rather than suspending inside it, so resuming is a
+    new run carrying the state the last one finished with. This says which
+    entry it should take instead of starting from the top.
+    """
+
+    NOTHING = ""
+    TOOL_APPROVAL = "tool_approval"
+    REPLY_APPROVAL = "reply_approval"
+
+
+class BaseState(BaseModel):
+    context: Context
+    # Set by the backend when it sends a reviewer's answer back, read by the
+    # entry router of whichever graph owns that gate.
+    resuming: Resuming = Resuming.NOTHING
+    # Set by a gate on its way out, so the caller knows the run stopped for a
+    # person rather than finishing.
+    awaiting: Resuming = Resuming.NOTHING
+```
+
+A gate tells whoever is watching, says what it is waiting on, and routes to a node that does nothing:
+
+```python
+async def tool_gate(self, state: ToolState) -> Command[Literal["tool_await"]]:
+    """Stop the run with the proposal on the table.
+
+    The reviewer's answer arrives as a new run rather than as a value
+    returned into this function, so the only thing left to do here is say
+    what is being waited on and let the graph finish.
+    """
+    await self.emit(ToolApprovalMessage(payload=...))
+    return Command(update={"awaiting": Resuming.TOOL_APPROVAL}, goto="tool_await")
+
+async def tool_await(self, state: ToolState) -> ToolState:
+    """Where the run stops while a person decides.
+
+    A node that does nothing, on purpose. Ending here rather than
+    suspending inside the gate makes the stop a place on the graph: it is
+    drawn, it gets its own span, and the state the run finished with is
+    the whole of what a resume needs.
+    """
+    return state
+```
+
+That empty node is the part I like most, and it is the part that looks silliest in a diff. An `interrupt()` is invisible: it is a function call in the middle of a node, it draws nothing, and finding every place a run can stop means grepping. `tool_await` is a box on the picture with a dashed border. The same is true in a trace: the stop has a span, with a duration, which is how long the human took.
+
+Then the entry router, which is the resume:
+
+```python
+def entry(self, state: ToolState) -> str:
+    """Where a run enters this graph.
+
+    A fresh run plans a tool. A run carrying an approved gate skips
+    straight to running it, because the planning already happened in the
+    run that stopped.
+    """
+    if state.resuming is Resuming.TOOL_APPROVAL:
+        return "tool_execute" if state.approved else "__end__"
+    return "tool_plan"
+```
+
+That is the whole mechanism. Per gate it is three or four lines, and it is readable by someone who has never used LangGraph. The parent has the same shape one level up, routing a resume straight into the subgraph that stopped rather than through the work that already happened:
+
+```python
+match state.resuming:
+    case Resuming.TOOL_APPROVAL:
+        return Command(update={"awaiting": Resuming.NOTHING}, goto="tool")
+    case Resuming.REPLY_APPROVAL:
+        return Command(update={"awaiting": Resuming.NOTHING}, goto="delivery")
+```
+
+On the wire, every run now ends the same way, whether it answered or stopped:
+
+```python
+await emitter_for(self)(
+    RunEndedMessage(
+        payload=RunEndedPayload(
+            thread_id=self.thread_id,
+            awaiting=str((final or {}).get("awaiting") or Resuming.NOTHING),
+            state=SupportState.model_validate(final).model_dump(mode="json"),
+        )
+    ),
 )
 ```
 
-With it, models come back as models in both modes, there is no re-validation anywhere in this codebase, and a test asserts `type(restored) is type(sample)` for everything a state can hold.
+The backend stores that blob against the ticket and the audience, and sends it back with the decision. The agent compiles its graph with no checkpointer and forgets everything.
 
-The list it reads from is **derived from the unions** rather than typed out:
+Two smaller things fell out that I did not expect. The relay stopped guessing which event was the last one, because now there is exactly one terminal event instead of five that each might be. And the findings a reviewer needs no longer have to ride the stop payload: a subgraph's writes merge into the parent when it **returns**, and this one returns, so everything the parent needs has already landed by the time the run ends.
 
-```python
-# Every model a graph state can hold. Derived from the unions, because
-# listing it by hand is what went wrong.
-CHECKPOINTED: tuple[Any, ...] = (
-    Audience, Context, Ticket, Turn,
-    Classification, TicketAnswer, ...
-)
-```
+## The three bugs that fell out of the switch
 
-Somebody adds a member to a decision union, does not think about serialization, and one resume path breaks the week strict mode lands. Deriving it means the two cannot drift, and a second test walks every state annotation to check each model it can hold is listed.
+This is the part worth reading twice, because the migration looked finished long before it was. All three were caught by converting tests that already existed, which is the entire argument for having written them.
 
-One trap worth naming: the allowlist takes `(module, qualname)` pairs, not module names. Get it wrong and you are back to the warning, which is to say back on the deadline.
+**A stopped subgraph did not stop the parent.** The tool gate ended its subgraph cleanly, control went back to the parent, and the parent did what it always does after the tool subgraph: reported the tool call and drafted an answer about it. The tool had not run. A reviewer was looking at a card asking permission for a refund that the customer had already been told about. That is the `if state.awaiting is not Resuming.NOTHING: return "__end__"` in `route_after_tool`, and under `interrupt()` the problem could not exist, because the parent never got control back at all.
 
-## Interrupts: parking a run mid-flight
+**A resumed run ended immediately.** The carried state still said `awaiting: tool_approval`, because that is what the run that stopped ended with. So the check I had just added read it and ended the run on the spot. Clearing the mark on the way in is one line in the parent's entry, and the bug it fixes is a reviewer approving something and watching nothing happen, which is the same symptom as the subgraph-checkpointer mistake and a completely different cause.
 
-Now the payoff. The node that waits for a human:
+**The refund fired twice.** This one is the reason I am glad it was tests and not production. Irreversible tools go through an at-most-once ledger keyed on the run and the node, so a retry returns the first attempt's result rather than making a second call. The key was built from LangGraph's `checkpoint_ns`, which looks like `node:task-uuid`, and that uuid is minted per invocation. Under the old design the same invocation was resumed, so the key held. Under the new one the resume is a new invocation with a new uuid, so the ledger saw a different call, claimed it, and refunded again.
 
 ```python
-async def delivery_approval(
-    self, state: DeliveryState
-) -> Command[Literal["delivery_send", "__end__"]]:
-    """Park the run until a human accepts, edits, or rejects the draft."""
-    answer = state.answer
-    # Findings ride the interrupt rather than the state: a subgraph's
-    # writes only merge into the parent when it returns, and the reviewer
-    # needs them now.
-    decision = interrupt(
-        {
-            "kind": "reply_approval",
-            "draft": answer.content,
-            "findings": list(state.guardrail_findings),
-        }
-    )
+# The namespace is "node:task-uuid", and the uuid is minted per invocation.
+node = namespace.split(":", 1)[0]
+return f"{thread}:{node}:{tool}"
 ```
 
-The subgraph it sits in is three nodes, and every edge out of the first two is conditional, because most replies never stop for anyone:
+Three lines. The test that caught it asserts the refund tool was called once, and it had been passing for weeks against a design where that was true for a different reason.
 
-```mermaid
-graph TD;
-    start([start]) --> delivery_screen
-    delivery_screen -.-> delivery_approval
-    delivery_screen -.-> delivery_send
-    delivery_screen -.-> finish([end])
-    delivery_approval -.-> delivery_send
-    delivery_approval -.-> finish
-    delivery_send --> finish
-```
-
-`delivery_screen` decides whether a person is needed. Only the middle path parks.
-
-`interrupt()` stops the run. The graph checkpoints, the call stack unwinds, and the process is free. Later, a resume delivers a value and execution continues from inside this function as though it had never stopped.
-
-### Findings ride the interrupt, not the state
-
-That comment is the second subgraph lesson and it is not obvious. A subgraph's writes to state **only merge into the parent when the subgraph returns.** A parked subgraph has not returned. So anything written to state before the interrupt is invisible to the parent, and therefore invisible to the backend relaying it, and therefore invisible to the reviewer.
-
-The guardrail findings are exactly what the reviewer needs to judge the draft. If they go in state, they arrive after the decision, which is useless. So they travel in the interrupt payload, which crosses the boundary immediately.
-
-The general rule: the interrupt payload is the only channel from a parked subgraph to the outside world. Put everything the human needs in it.
-
-### The thread id is the ticket id
-
-The last piece, and it is the one that makes this work in a browser rather than in a notebook.
-
-The thread is keyed on the **ticket**, not on a connection or a session. So when a reviewer approves something twenty minutes later, on a different socket, possibly after a page reload, possibly on a different worker process, the resume still finds the parked run. The backend deliberately disconnects after `approval_required` and opens a fresh connection to resume.
-
-That is only safe because the thread id is derived from durable business identity. Key the thread on a connection and your approval flow works in testing and fails the moment a reviewer takes a coffee break.
+There was a fourth, found later and not by a test: a reviewer's rewritten draft was passed to the resumed run beside the state rather than inside it, as a key no state field matches. Pydantic drops an unknown key without a word, so the model's own draft went to the customer and the reviewer's words went nowhere. The graph-level tests built that state by hand and never saw it. It has a test at the level where it broke now.
 
 ### Accept, edit, or reject
 
-Three outcomes, and the middle one is the interesting one:
-
-```python
-edited = decision.get("content") if isinstance(decision, dict) else None
-return Command(
-    update={
-        "approval_granted": True,
-        "answer": answer.model_copy(update={"content": edited or answer.content}),
-    },
-    ...
-)
-```
+Three outcomes, and the middle one is the one that matters.
 
 ![The same gate with the amount edited to 9, the button now reading Run with my corrections](./_images/corrected.png)
 
-A reviewer can change the draft on the way through. The resumed run sends what the human wrote, not what the model wrote. In practice this is the feature that makes an approval gate tolerable: without it, a reviewer with a small objection has to reject, which discards the work, which means they stop using the gate and start writing replies by hand.
+A reviewer can change the draft, or the tool's arguments, on the way through. The resumed run does what the human wrote, not what the model wrote: correcting £29 to £9 means £9 is what gets refunded. In practice this is the feature that makes an approval gate tolerable. Without it, a reviewer with a small objection has to reject, which discards the work, which means they stop using the gate and start doing the job by hand.
 
-Rejection is also recorded as an outcome rather than silently dropping everything, and a rejected draft is deliberately never written to the ticket log, so a reply the customer never saw leaves no trace suggesting they did.
+It also needs one thing said out loud to the model afterwards. A live run answered a corrected £9 refund by telling the rep to refund the missing £20, which is the reviewer's decision being undone by the summary of it. So the state carries whether the arguments were changed, and the prompt says that is the decision rather than a mistake.
 
-### You do not always need this
+Rejection is recorded as an outcome rather than silently dropping everything, and a rejected draft is deliberately never written to the ticket log, so a reply the customer never saw leaves no trace suggesting they did.
 
-`interrupt()` is not the only way to pause, and for a lot of systems it is not the best one. The alternative is to end the run at a terminal state, persist what a resume would need, and start a fresh run that routes on it from the entry node. No checkpointer, no second store.
+## So which should you use
 
-I have built both. What each buys:
+Not a recommendation, a rule, and it is the one row of that table that decides it:
 
-| | `interrupt()` plus a checkpointer | terminal state, resume from the entry |
-| --- | --- | --- |
-| Stores that must agree | two | one |
-| Who writes the resume logic | the framework | you, per pause |
-| What survives | every channel value, automatically | what you deliberately persist |
-| Growth | per thread per super-step | one record, overwritten |
-| Where a pause may be | anywhere, including mid-node | only where the graph can cleanly end |
-| If the saved state will not load | you need a recovery path | discard it and carry on |
+**If every stop lands where the graph can cleanly end, end it.** Hand the state back, resume from an entry router, and you get one durable copy of a thread, an agent process that holds nothing, a payload you can read in a log, and bounded growth. You give up nothing you were using.
 
-That last row is the one I would weigh most, and it is the one I underrated. State you persist yourself can be thrown away when it no longer parses, and the conversation continues from the record. A checkpoint cannot, because the checkpoint **is** the run, so an unreadable one leaves an approval permanently unreachable unless you build the escape yourself. This codebase does now: a resume reads the thread first and drops it if it will not deserialize, which turns a stuck ticket into one the backend can propose again.
+**If a stop lands mid-flight**, inside real work you cannot cheaply redo, take the checkpoint. That is what it is for, and rebuilding it by hand would mean reimplementing an execution model.
 
-So the rule, rather than a recommendation: **if every pause lands at a turn boundary, persist your own state and resume from an entry point.** You get one store, a stateless agent and bounded growth, and you give up nothing you were using. **If a pause lands mid-flight**, with real work and possibly a second pause behind it, take the checkpoint.
+I had one of each, or thought I did. `delivery_approval` is a turn boundary in all but name, since only a send follows it. `tool_gate` looked like the hard case: after it the tool runs, the parent writes a report, another model call drafts an answer, and delivery can stop again at a different gate. But "work follows the stop" is not the same as "the stop is mid-work". Everything after that gate is reachable from an entry router with the state in hand, which is exactly what the four lines above do. The harder of the two sets the architecture, and I had mistaken which one it was.
 
-This system has one of each. `delivery_approval` is a turn boundary in all but name, since only a send follows it. `tool_gate` is not: after it the tool runs, the parent writes a report, another model call drafts the answer, and delivery can park again at a different gate. The harder of the two sets the architecture, which is how it usually goes.
+The honest version of the rule is uglier and more useful: **write down what a resume would actually need, before deciding you cannot write it down.** It took me twenty minutes once I stopped assuming.
 
 ## Bounds belong together, not where they loop
 
-One more structural habit, and the only one here that has nothing to do with LangGraph. **A limit that constrains another limit has to be readable next to it, or nobody can check the arithmetic.** That is as true of timeouts against a client deadline, or pool sizes against a connection cap, as it is of anything below.
+One more structural habit, and the only one here with nothing to do with LangGraph. **A limit that constrains another limit has to be readable next to it, or nobody can check the arithmetic.** That is as true of timeouts against a client deadline, or pool sizes against a connection cap, as it is of anything below.
 
-The version of it in this codebase: every limit a run is subject to lives in one file, and the reason is in its first line:
+Every limit a run is subject to lives in one file, and the reason is in its first line:
 
 > A loop whose ceiling is written where it loops is a ceiling nobody can check against the others. These are together because they constrain each other: the recursion limit has to leave room for the worst case the retry limits allow.
 
@@ -336,22 +385,20 @@ GRAPH_RECURSION_LIMIT = 150
 
 A graph with subgraphs and retries has a worst-case path length that is not obvious from any one file. Scatter the ceilings and nobody can tell whether the global one leaves room for the local ones, so the first symptom is a legitimate long run hitting the recursion limit and looking like an infinite loop. Writing the longest path out in a comment means the next person can check the arithmetic instead of guessing at it.
 
-## Why the order is not negotiable
-
-If you take one structural thing from this post: **persistence has to be understood before interrupts, because an interrupt is only possible because the checkpoint exists.** People reach for human-in-the-loop first, since it is the visible feature, and then try to bolt it onto a graph with no durable state. It cannot work. The pause is not a feature of the gate; it is a consequence of being able to write down exactly where you were and pick it up somewhere else.
-
 ## What it costs
 
-**Postgres is now on your critical path**, and a checkpoint write happens after every node. For a flow whose steps are model calls measured in seconds, that is invisible. For a hot loop it would not be.
+**Every decision carries the state back.** It is a JSON blob of a couple of kilobytes on a WebSocket that is already open, so in this system it is free. On a different shape, a huge state or a chatty gate, it would not be, and that is the trade you are making.
 
-Checkpoints accumulate. Nothing here prunes them. A long-lived thread grows forever, and a retention policy is work you still owe.
-
-**Debugging a resume is harder than debugging a run.** The state came from a database, the models are dicts, and the failure happens inside a function that appears to have been called normally. The trace is what saves you, which is post 9.
+**A new question must not inherit the last run's state.** This is the sharp edge of carrying it yourself, and it cost me a test to find. Send the whole blob into a fresh turn and the second question arrives with the first one's receipt, approval and answer already set, and routers behave accordingly. So the agent reads the carried state two ways: a decision continues the run it came from and takes the state whole, a new question takes only what the thread is meant to remember. Those are four lines each and they are the two most load-bearing functions in the service.
 
 Subgraph boundaries are a commitment. Moving a node across one changes what merges when. Splitting a subgraph later is not a refactor you do casually.
 
-One run at a time per lane, and that took a bug to learn. Two runs on one thread are two graphs writing one state, and the second wins. A reply that was parked at the gate could be lost when a later message started another run and overwrote the interrupt. A run now claims its lane and holds the claim _through_ a park, because waiting for a person is not the same as being finished.
+One run at a time per lane, and that took a bug to learn. One state blob is kept per ticket and audience, so two runs in one lane are two graphs writing one thread and the second wins. A reply waiting at the gate could be lost when a later message started another run and replaced the state behind it. A run now claims its lane and holds the claim _through_ a stop, because waiting for a person is not the same as being finished.
 
-Next up is the realtime half: why the backend talks to the agent over a WebSocket rather than a queue, and how a node buried in a subgraph streams progress to a browser without the graph knowing anything about sockets. Hope this one is useful. If you are picking a place to be careful, make it the checkpointer and the dicts.
+Debugging a resume is still harder than debugging a run, though less than it was. The state came from a database and the run has no history of how it got there. The difference is that the state is now JSON somebody can read, in a table somebody can query, rather than a msgpack blob in a framework's schema. The trace is what saves you either way, which is post 9.
+
+Next up is the realtime half: why the backend talks to the agent over a WebSocket rather than a queue, and how a node buried in a subgraph streams progress to a browser without the graph knowing anything about sockets.
+
+Hope this one is useful. If you have shipped a human-in-the-loop gate and landed somewhere different, I would read that gladly, and if you have tips of your own on where to keep a half-finished run, pass them on.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).
