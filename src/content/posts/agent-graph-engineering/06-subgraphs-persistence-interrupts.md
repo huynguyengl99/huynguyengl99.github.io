@@ -167,9 +167,28 @@ LangGraph ships an in-memory saver and it is the obvious default while developin
 
 Read that failure mode carefully, because it is nastier than it sounds. Every draft waiting for a human disappears on deploy. No error. No log line, unless you wrote one. Customers simply never get the reply somebody approved, and nobody notices until one of them asks again. The in-memory saver is correct for tests and actively dangerous anywhere else, so it announces itself when selected.
 
-### The serializer has an allowlist, and deriving it matters
+### The serializer has an allowlist, and it is a deadline
 
-On the default serializer a resume hands your Pydantic models back as plain dicts, so `state.answer.content` works before an interrupt and raises `AttributeError` after one. That is the version of this most people meet, and I spent a while treating it as a law of the framework. It is a default. Configure the serializer and models come back as models:
+Graph state holds Pydantic models and they have to survive a round trip through the serializer. Today, on the defaults, they do. Save a `RunTool` and a resume hands you back a `RunTool`. What you also get is this, every time:
+
+```
+Deserializing unregistered type assistant.outputs.support.RunTool from
+checkpoint. This will be blocked in a future version. Set
+LANGGRAPH_STRICT_MSGPACK=true to block now, or add to
+allowed_msgpack_modules to allow explicitly.
+```
+
+That is a deadline written as a warning, and it is worth understanding before it arrives rather than after. Turn strict mode on, which is what a future version will do for you, and an unregistered model stops being a model:
+
+```python
+# LANGGRAPH_STRICT_MSGPACK=true, type not allow-listed
+{"decision": {"reasoning": "Refund it."}, "q": "hi"}
+#             ^ a plain dict, not a RunTool
+```
+
+So `state.decision` is a `dict`, `isinstance(decision, RunTool)` is `False`, and a router falls through to the branch it takes when it has no decision. A resumed run quietly does something different from what it was doing before it parked. No exception, one log line, and the symptom reads like the model made an odd choice.
+
+The allowlist is how you opt out of that, now rather than on the day the default flips:
 
 ```python
 serde = JsonPlusSerializer(
@@ -179,25 +198,22 @@ serde = JsonPlusSerializer(
 )
 ```
 
-There is no re-validation anywhere in this codebase as a result, and a test asserts it: `type(restored) is type(sample)` for every model a state can hold.
+With it, models come back as models in both modes, there is no re-validation anywhere in this codebase, and a test asserts `type(restored) is type(sample)` for everything a state can hold.
 
-What the allowlist replaces the dict problem with is quieter. Here is the list it is built from, and both comments on it are scars:
+The list it reads from is **derived from the unions** rather than typed out:
 
 ```python
-# Every model a graph state can hold. A missing one comes back as nothing rather
-# than an error, so a router reads no route and takes its fallback branch.
-# Derived from the unions, because listing it by hand is what went wrong.
+# Every model a graph state can hold. Derived from the unions, because
+# listing it by hand is what went wrong.
 CHECKPOINTED: tuple[Any, ...] = (
     Audience, Context, Ticket, Turn,
     Classification, TicketAnswer, ...
 )
 ```
 
-**A type missing from that list does not raise. It comes back as nothing.** A router reads `state.decision`, finds `None`, and takes its fallback branch, so a resumed run quietly does something different from what it was doing before it parked, and it reads like the model made an odd choice rather than the serializer dropping a value. That is as close to an undebuggable bug as this codebase gets.
+Somebody adds a member to a decision union, does not think about serialization, and one resume path breaks the week strict mode lands. Deriving it means the two cannot drift, and a second test walks every state annotation to check each model it can hold is listed.
 
-Which is why the list is **derived from the unions** rather than typed out. Somebody adds a member to a decision union, does not think about serialization, and one resume path breaks weeks later. Deriving it means the two cannot drift, and a second test walks every state annotation to check each model it can hold is listed.
-
-One smaller trap in the same area: the allowlist takes `(module, qualname)` pairs, not module names. Getting it wrong only warns today and is slated to start raising.
+One trap worth naming: the allowlist takes `(module, qualname)` pairs, not module names. Get it wrong and you are back to the warning, which is to say back on the deadline.
 
 ## Interrupts: parking a run mid-flight
 
