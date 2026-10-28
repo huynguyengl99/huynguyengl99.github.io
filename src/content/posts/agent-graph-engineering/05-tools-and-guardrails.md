@@ -227,6 +227,6 @@ No tool sandboxing. Tools run in the agent process with whatever credentials it 
 
 No output moderation model. The screening is patterns, not a classifier. A classifier is better and costs a call.
 
-Next up is the hardest material in the series: subgraphs, persistence, and how a run pauses for a human and resumes into the middle of itself. The `requires_approval=True` from earlier finally gets explained properly. Hope this one is useful, and if you take one thing, let it be raising structured errors instead of returning prose.
+Next up is [the hardest material in the series](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/): subgraphs, persistence, and how a run pauses for a human and resumes into the middle of itself. The `requires_approval=True` from earlier finally gets explained properly. Hope this one is useful, and if you take one thing, let it be raising structured errors instead of returning prose.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).
