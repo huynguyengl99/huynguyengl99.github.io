@@ -12,7 +12,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 6
 ---
 
-> **TL;DR** Composing is the easy half: a subgraph is a compiled graph used as a node, it declares its own state, and only a parent can route after it. Stopping for a human is the hard half, and I got it wrong the first time. I built it on `interrupt()` and a Postgres checkpointer, which works and is what the docs show. Then a reader asked why the agent needed a database at all, I could not answer it well, and tearing both out took a day and left the system smaller: a gate now **ends** its subgraph, the whole state goes back to the caller, and the decision arrives as a new run carrying it. Two durable copies of a thread became one. Three bugs fell out of the switch, and one of them refunded money twice.
+> **TL;DR** Composing is the easy half: a subgraph is a graph in its own right, with its own state and its own start and finish, that a parent mounts at one position in its own. The parent only ever sees a node, which is why the parent is the one that routes after it, and why the subgraph's start is free to be a router that decides where a run begins. Stopping for a human is the hard half, and I got it wrong the first time. I built it on `interrupt()` and a Postgres checkpointer, which works and is what the docs show. Then a reader asked why the agent needed a database at all, I could not answer it well, and tearing both out took a day and left the system smaller: a gate now **ends** its subgraph, the whole state goes back to the caller, and the decision arrives as a new run carrying it. Two durable copies of a thread became one. Three bugs fell out of the switch, and one of them refunded money twice.
 
 This is the post I would have wanted most, and the reason is simple. Everything up to here you could have worked out from the docs in an afternoon. This part I learned by getting it wrong, shipping the wrong thing, and then having to explain it to somebody.
 
@@ -22,7 +22,7 @@ They are in one post because they are one capability. A flow large enough to nee
 
 ## Subgraphs: composing without composing spaghetti
 
-The support graph routes to three places that are themselves graphs: searching the knowledge base, running a tool, and delivering a reply. Each is a compiled graph used as a node:
+The support graph routes to three places that are themselves graphs: searching the knowledge base, running a tool, and delivering a reply. Each is compiled on its own and mounted in the parent at one position, which `add_node` is the method for:
 
 ```python
 graph.add_node("knowledge", KnowledgeGraph(self.config, self.emit).subgraph())
