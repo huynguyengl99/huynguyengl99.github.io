@@ -12,7 +12,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 6
 ---
 
-> **TL;DR** Composing is the easy half: a subgraph is a graph in its own right, with its own state and its own start and finish, that a parent mounts at one position in its own. The parent only ever sees a node, which is why the parent is the one that routes after it, and why the subgraph's start is free to be a router that decides where a run begins. Stopping for a human is the hard half, and I got it wrong the first time. I built it on `interrupt()` and a Postgres checkpointer, which works and is what the docs show. Then a reader asked why the agent needed a database at all, I could not answer it well, and tearing both out took a day and left the system smaller: a gate now **ends** its subgraph, the whole state goes back to the caller, and the decision arrives as a new run carrying it. Two durable copies of a thread became one. Three bugs fell out of the switch, and one of them refunded money twice.
+> **TL;DR** Composing is the easy half: a subgraph is a graph in its own right, with its own state and its own start and finish, that a parent mounts at one position in its own. The parent only ever sees a node, which is why the parent is the one that routes after it, and why the subgraph's start is free to be a router that decides where a run begins. Stopping for a human is the hard half, and I got it wrong the first time. I built it on `interrupt()` and a Postgres checkpointer, which works and is what the docs show. Then a reader asked why the agent needed a database at all, I could not answer it well, and tearing both out took a day and left the system smaller: a gate now **ends** its subgraph, the whole state goes back to the caller, and the decision arrives as a new run carrying it. Two durable copies of a thread that sat in two databases now sit in one, where a single transaction can hold them. Three bugs fell out of the switch, and one of them refunded money twice.
 
 This is the post I would have wanted most, and the reason is simple. Everything up to here you could have worked out from the docs in an afternoon. This part I learned by getting it wrong, shipping the wrong thing, and then having to explain it to somebody.
 
@@ -132,11 +132,11 @@ graph TD;
 
 A dashed, thicker outline marks a node where the run stops and waits for a person, and those two are the only places that happens. The marking is derived from each node's own source rather than from a list, because a hand-kept list of which nodes stop would go stale exactly here, in the picture most readers look at instead of the code.
 
-Four things are worth reading off it. `knowledge` contains a loop, search to refine and back, which is the bounded retry further down this post. `tool` has a gate in the middle of it. `delivery` is reachable from three different places in the parent, which is why the approval logic lives there once rather than at each call site.
+Three things are worth reading off it. `knowledge` contains a loop, search to refine and back, which is the bounded retry further down this post. `tool` has a gate in the middle of it. `delivery` is reachable from three different places in the parent, which is why the approval logic lives there once rather than at each call site.
 
 And every subgraph can reach its own finish early. `tool_plan` can stop without running anything, the gate ends the subgraph instead of executing, and `delivery_screen` can end without sending. Those edges are the rejections and the stops, and they are the reason a subgraph needs a finish of its own rather than always handing control back with a result.
 
-Notice also that every subgraph's own `start` has conditional edges out of it. That is not decoration, and the rest of this post is mostly about why.
+Notice also that every subgraph's own `start` has conditional edges out of it. The rest of this post is mostly about why.
 
 ### A parent routes after a subgraph
 
@@ -159,13 +159,13 @@ def route_after_tool(self, state: SupportState) -> str:
     return "support_report_tool" if state.tool else "support_respond"
 ```
 
-Worth internalising as a design constraint rather than a quirk. Subgraphs are reusable _because_ they are ignorant of who called them. The price of that reuse is that the caller owns the transition.
+Subgraphs are reusable _because_ they are ignorant of who called them, and the price of that reuse is that the caller owns the transition.
 
 That second paragraph of the docstring is a bug I wrote, and I will come back to it.
 
 ## Two kinds of state, and only one of them is yours
 
-Before the interesting part, the distinction [Part 2](/posts/agent-graph-engineering/split-the-services/) argued for, because everything below depends on it.
+Everything below depends on the distinction [Part 2](/posts/agent-graph-engineering/split-the-services/) argued for.
 
 The **business record** is what a person reads: the ticket, the messages, who said what. It is derived, it can be recomputed, and the backend owns it.
 
@@ -185,7 +185,7 @@ Here is the comparison I should have drawn before writing the first version:
 
 | | `interrupt()` plus a checkpointer | end the run, resume from the entry |
 | --- | --- | --- |
-| Durable copies of one thread | two | one |
+| Databases holding the thread | two | one |
 | Who writes the resume | the framework | you, once per gate |
 | What survives | every channel value, automatically | what you deliberately hand back |
 | Growth | per thread per super-step | one record, overwritten |
@@ -194,7 +194,7 @@ Here is the comparison I should have drawn before writing the first version:
 | Agent processes | the one holding the thread | any of them |
 | If the saved state will not load | you need a recovery path | discard it and carry on |
 
-The row I underrated is the first one. Two durable copies of one thread is not a performance cost, it is a correctness cost, and it shows up in the quietest way possible: the backend knows a reply is waiting for approval, the agent knows a run is parked, and nothing enforces that those two agree. A deploy, a reset, a thread that will not deserialize, and the browser shows a card whose run no longer exists. I built the escape hatch for that, which is a sentence I should have read as a warning rather than as progress.
+The row I underrated is the first one, and it costs correctness rather than speed. The backend knows a reply is waiting for approval, the agent knows a run is parked, and nothing enforces that those two agree. A deploy, a reset, a thread that will not deserialize, and the browser shows a card whose run no longer exists. I built the escape hatch for that, which is a sentence I should have read as a warning rather than as progress.
 
 The last row has the same shape. State you hand back can be thrown away when it no longer parses, and the conversation continues from the record. A checkpoint cannot be thrown away, because the checkpoint **is** the run.
 
@@ -288,7 +288,7 @@ def entry(self, state: ToolState) -> str:
     return "tool_plan"
 ```
 
-That is the whole mechanism. Per gate it is three or four lines, and it is readable by someone who has never used LangGraph. The parent has the same shape one level up, routing a resume straight into the subgraph that stopped rather than through the work that already happened:
+Per gate that is three or four lines, readable by someone who has never used LangGraph. The parent has the same shape one level up, routing a resume straight into the subgraph that stopped rather than through the work that already happened:
 
 ```python
 match state.resuming:
@@ -318,7 +318,7 @@ Two smaller things fell out that I did not expect. The relay stopped guessing wh
 
 ## The three bugs that fell out of the switch
 
-This is the part worth reading twice, because the migration looked finished long before it was. All three were caught by converting tests that already existed, which is the entire argument for having written them.
+The migration looked finished long before it was. All three came out of converting tests that already existed, which is the entire argument for having written them.
 
 **A stopped subgraph did not stop the parent.** The tool gate ended its subgraph cleanly, control went back to the parent, and the parent did what it always does after the tool subgraph: reported the tool call and drafted an answer about it. The tool had not run. A reviewer was looking at a card asking permission for a refund that the customer had already been told about. That is the `if state.awaiting is not Resuming.NOTHING: return "__end__"` in `route_after_tool`, and under `interrupt()` the problem could not exist, because the parent never got control back at all.
 
@@ -350,19 +350,19 @@ Rejection is recorded as an outcome rather than silently dropping everything, an
 
 ## So which should you use
 
-Not a recommendation, a rule, and it is the one row of that table that decides it:
+One row of that table decides it:
 
-**If every stop lands where the graph can cleanly end, end it.** Hand the state back, resume from an entry router, and you get one durable copy of a thread, an agent process that holds nothing, a payload you can read in a log, and bounded growth. You give up nothing you were using.
+If every stop lands where the graph can cleanly end, end it. Hand the state back, resume from an entry router, and the thread lives in one database, the agent process holds nothing, the payload is readable in a log, and growth is bounded. You give up nothing you were using.
 
-**If a stop lands mid-flight**, inside real work you cannot cheaply redo, take the checkpoint. That is what it is for, and rebuilding it by hand would mean reimplementing an execution model.
+If a stop lands mid-flight, inside real work you cannot cheaply redo, take the checkpoint. That is what it is for, and rebuilding it by hand would mean reimplementing an execution model.
 
 I had one of each, or thought I did. `delivery_approval` is a turn boundary in all but name, since only a send follows it. `tool_gate` looked like the hard case: after it the tool runs, the parent writes a report, another model call drafts an answer, and delivery can stop again at a different gate. But "work follows the stop" is not the same as "the stop is mid-work". Everything after that gate is reachable from an entry router with the state in hand, which is exactly what the four lines above do. The harder of the two sets the architecture, and I had mistaken which one it was.
 
-The honest version of the rule is uglier and more useful: **write down what a resume would actually need, before deciding you cannot write it down.** It took me twenty minutes once I stopped assuming.
+The honest version of the rule is uglier: write down what a resume would actually need before deciding you cannot write it down. It took me twenty minutes once I stopped assuming.
 
 ## Bounds belong together, not where they loop
 
-One more structural habit, and the only one here with nothing to do with LangGraph. **A limit that constrains another limit has to be readable next to it, or nobody can check the arithmetic.** That is as true of timeouts against a client deadline, or pool sizes against a connection cap, as it is of anything below.
+One more structural habit, and the only one here with nothing to do with LangGraph. A limit that constrains another limit has to be readable next to it, or nobody can check the arithmetic. That is as true of timeouts against a client deadline, or pool sizes against a connection cap, as it is of anything below.
 
 Every limit a run is subject to lives in one file, and the reason is in its first line:
 
@@ -386,9 +386,9 @@ A graph with subgraphs and retries has a worst-case path length that is not obvi
 
 ## What it costs
 
-**Every decision carries the state back.** It is a JSON blob of a couple of kilobytes on a WebSocket that is already open, so in this system it is free. On a different shape, a huge state or a chatty gate, it would not be, and that is the trade you are making.
+Every decision carries the state back. It is a JSON blob of a couple of kilobytes on a WebSocket that is already open, so in this system it is free. On a different shape, a huge state or a chatty gate, it would not be, and that is the trade you are making.
 
-**A new question must not inherit the last run's state.** This is the sharp edge of carrying it yourself, and it cost me a test to find. Send the whole blob into a fresh turn and the second question arrives with the first one's receipt, approval and answer already set, and routers behave accordingly. So the agent reads the carried state two ways: a decision continues the run it came from and takes the state whole, a new question takes only what the thread is meant to remember. Those are four lines each and they are the two most load-bearing functions in the service.
+A new question must not inherit the last run's state, which is the sharp edge of carrying it yourself, and it cost me a test to find. Send the whole blob into a fresh turn and the second question arrives with the first one's receipt, approval and answer already set, and routers behave accordingly. So the agent reads the carried state two ways: a decision continues the run it came from and takes the state whole, a new question takes only what the thread is meant to remember. Those are four lines each and they are the two most load-bearing functions in the service.
 
 Subgraph boundaries are a commitment. Moving a node across one changes what merges when. Splitting a subgraph later is not a refactor you do casually.
 
