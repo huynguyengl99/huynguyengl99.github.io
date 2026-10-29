@@ -3,7 +3,6 @@ title: "Agent Graph Engineering, Part 6: Subgraphs, and a Run That Stops for a P
 description: "How a run stops to wait for a human and picks back up later. Subgraphs as white boxes, why execution state is not your business record, and the trade I got wrong first: I shipped this on LangGraph interrupts and a Postgres checkpointer, then tore both out."
 ogImage: ./_images/cover-06.png
 pubDatetime: 2026-10-28T07:42:00+07:00
-modDatetime: 2026-10-28T20:20:00+07:00
 tags:
   - ai-agents
   - langgraph

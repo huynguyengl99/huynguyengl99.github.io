@@ -3,7 +3,6 @@ title: "Agent Graph Engineering, Part 2: Split the Services, and Know Where the 
 description: "Why the agent graph and the business logic belong in dedicated services, how to draw the line at state ownership rather than at layers, and the bug that taught me the thread a person reads and the thread a model remembers are not the same object."
 ogImage: ./_images/cover-02.png
 pubDatetime: 2026-10-12T09:00:00+07:00
-modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph

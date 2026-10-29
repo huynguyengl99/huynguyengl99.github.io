@@ -3,7 +3,6 @@ title: "Agent Graph Engineering, Part 4: The Agent and the Graph"
 description: "A typed model call and the flow that routes it, taught together because they compose. Why the agent's output type is also your routing table, how a node declares its own legal moves, and what replaces the if/else on an intent classifier."
 ogImage: ./_images/cover-04.png
 pubDatetime: 2026-10-20T09:00:00+07:00
-modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph

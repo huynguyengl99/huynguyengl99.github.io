@@ -3,7 +3,6 @@ title: "Agent Graph Engineering, Part 5: Tools and Guardrails"
 description: "What the model may do, and what it may say. Structured tool errors you raise instead of return, at-most-once execution for actions you cannot undo, and why the guardrail that works is demarcation rather than detection."
 ogImage: ./_images/cover-05.png
 pubDatetime: 2026-10-20T10:00:00+07:00
-modDatetime: 2026-10-29T03:10:00+07:00
 tags:
   - ai-agents
   - langgraph
