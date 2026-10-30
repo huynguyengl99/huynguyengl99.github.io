@@ -35,7 +35,7 @@ export const SERIES_INFO: Record<string, SeriesInfo> = {
       { title: "Contracts, not conventions: how two codebases stay in step", slug: "contracts-not-conventions" },
       { title: "The agent and the graph: a typed model call, and the flow that routes it", slug: "the-agent-and-the-graph" },
       { title: "Tools and guardrails: what the model may do, and what it may say", slug: "tools-and-guardrails" },
-      { title: "Subgraphs, persistence, and interrupts: how a run pauses for a human", slug: "subgraphs-persistence-interrupts" },
+      { title: "Subgraphs, and a run that stops for a person: where a half-finished run lives", slug: "subgraphs-persistence-interrupts" },
       { title: "Why a WebSocket, and how progress streams from anywhere in the graph", slug: "why-a-websocket" },
       { title: "Practices for both sides: the business service and the agent service", slug: "practices-for-both-services" },
       { title: "Observability: tracing a run, seeing the graph, and what it cost", slug: "tracing-a-run" },
