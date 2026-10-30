@@ -126,7 +126,7 @@ The codebase says this plainly, and says how it knows:
 
 The fix is a ledger. Before an irreversible call, claim it. After it returns, record it. The key is the run plus the node, which is stable across the retry, so the same logical execution gets the same key even after a restart, and it lives in the agent's own Postgres so the claim survives the process that made it.
 
-That quote is worth a note, because it changed. It used to blame LangGraph checkpointing after a node returns, which was true of the design then. [Part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) replaced that design and the sentence had to be rewritten, and the ledger did not: the retry arrives by a different road and lands in the same place. Which is the useful thing to notice. A guard worth having does not depend on which mechanism brings the second attempt.
+That quote is worth a note, because it changed. It used to blame LangGraph checkpointing after a node returns, which was true of the design then. [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) replaced that design and the sentence had to be rewritten, and the ledger did not: the retry arrives by a different road and lands in the same place. Which is the useful thing to notice. A guard worth having does not depend on which mechanism brings the second attempt.
 
 And then the part that makes it trustworthy:
 
@@ -229,6 +229,6 @@ No tool sandboxing. Tools run in the agent process with whatever credentials it 
 
 No output moderation model. The screening is patterns, not a classifier. A classifier is better and costs a call.
 
-Next up is [the hardest material in the series](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/): subgraphs, persistence, and how a run pauses for a human and resumes into the middle of itself. The `requires_approval=True` from earlier finally gets explained properly. Hope this one is useful, and if you take one thing, let it be raising structured errors instead of returning prose.
+Next up is [the structural half](/posts/agent-graph-engineering/subgraphs-multi-agent-system/): splitting one graph into specialists, which is a multi-agent system by another name. The `requires_approval=True` from earlier finally gets explained properly. Hope this one is useful, and if you take one thing, let it be raising structured errors instead of returning prose.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).

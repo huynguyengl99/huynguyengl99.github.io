@@ -94,7 +94,7 @@ This is the piece that changes how you work, and the piece your team will push b
 
 - **A diagram from the code.** LangGraph exports Mermaid. Your architecture picture is generated from the thing that actually runs, so it cannot go stale. No more hand-drawn draw.io files that lie.
 - **Inspectable state at every step.** You can see what the state was going into a node and coming out. When something breaks, you know which transition did it rather than guessing.
-- **A run you can stop and pick up.** The state is one value you can write down, so a run can wait for a person and carry on later, in another process, which is what makes human-in-the-loop approvals part of the graph rather than a bolt-on. LangGraph will store that for you; [part 6](/posts/agent-graph-engineering/subgraphs-persistence-interrupts/) is about why this codebase ended up storing it elsewhere.
+- **A run you can stop and pick up.** The state is one value you can write down, so a run can wait for a person and carry on later, in another process, which is what makes human-in-the-loop approvals part of the graph rather than a bolt-on. LangGraph will store that for you; [part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) is about why this codebase ended up storing it elsewhere.
 - **Structure that survives change.** Adding a capability means adding a node and an edge, not threading another condition through an existing chain.
 
 The honest downsides: it is a LangChain-ecosystem library, so some of the ergonomics assume LangChain; and streaming from non-LangChain code goes through a generic custom channel, which is the gap chanx fills.
@@ -183,7 +183,7 @@ Each post stands alone, so you can start wherever your current problem is rather
 
 <SeriesMap series="Agent Graph Engineering" current="the-stack-and-why-each-piece-is-there" />
 
-Post 6 is the one I expect to be most useful. State that survives a pause, and a run that picks back up afterwards, are the hardest parts in practice and the least written about anywhere. It is also the one where I changed my mind in public: I shipped it on LangGraph interrupts and a checkpointer, then took both out, and the post is the comparison rather than the conclusion.
+Posts 6 and 7 are the ones I expect to be most useful. Splitting one graph into specialists is the structural decision everything else rests on, and where a half-finished run lives while a person decides is the hardest part in practice and the least written about anywhere.
 
 ## What it costs
 
