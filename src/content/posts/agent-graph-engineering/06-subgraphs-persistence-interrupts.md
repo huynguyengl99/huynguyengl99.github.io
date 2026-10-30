@@ -186,7 +186,7 @@ async def tool_await(self, state: ToolState) -> ToolState:
     return state
 ```
 
-That empty node is doing real work. An `interrupt()` is a function call in the middle of a node: it draws nothing, and finding every place a run can stop means grepping. `tool_await` is a box with a dashed border on the picture above, and in a trace it is a span whose duration is how long the human took.
+That empty node is doing real work. An `interrupt()` is a function call in the middle of a node: it draws nothing, and finding every place a run can stop means grepping. `tool_await` is a box with a dashed border on the picture above, and in a trace it is the run's last span, named. The wait itself is the gap to the next run, which is two timestamped runs in one tree rather than a number you have to go and compute.
 
 The state says how far the work got, and that is all:
 
