@@ -142,17 +142,11 @@ Three things to read off it. `knowledge` contains a loop, search to refine and b
 
 The second picture is a run of it:
 
-```
-support_start   graph.goto support_decide
-support_decide  graph.goto tool          decision RunTool
-tool_start      graph.goto tool_plan
-tool_plan       graph.goto tool_gate     plan ToolProposal  tool issue_refund
-tool_gate       graph.goto tool_await    tool_run pending
-tool_await                                            0.1ms
-tool_done                                             0.1ms
-```
+![A trace of one run: the run span at the top, then a span per node nested under it, each showing where it routed and what it decided, with each model call nested under the node that made it](./_images/trace-run.png)
 
-Every node is a span, nested under the run, with what it decided recorded beside it. The supervisor's choice of specialist is one line, the specialist's own planning is the next, and the state it left behind is an attribute. Nobody wrote logging for that; it falls out of each step being a node.
+Every node is a span, nested under the run, with where it routed and what it decided recorded beside it. The supervisor picking a specialist is one line, the specialist's own planning is the next, and each model call sits under the node that made it. Nobody wrote logging for any of that; it falls out of each step being a node.
+
+The last row is where this run stopped and waited for somebody, which is part 7's subject.
 
 ## Which of the two ways to compose one
 
