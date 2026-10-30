@@ -12,7 +12,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 7
 ---
 
-> **TL;DR** Two of the specialists from [Part 6](/posts/agent-graph-engineering/subgraphs-multi-agent-system/) have to stop and wait for a person. LangGraph's answer is `interrupt()`, and for a notebook or an internal script it is the right one. It comes with rules: the node restarts from the top on resume, matching is index-based, and renaming a node breaks every thread already waiting. They are all the same constraint, that the saved state is a position inside your code. This system does it the other way: the gate ends its subgraph, the whole state goes back to the caller, and the answer arrives as a new run that routes on how far the work got. The resume becomes a router you can read, and the agent holds nothing between requests.
+> **TL;DR** Two of the specialists from [Part 6](/posts/agent-graph-engineering/subgraphs-multi-agent-system/) have to stop and wait for a person. LangGraph's answer is `interrupt()`, and for a notebook or an internal script it is the right one. It comes with rules: the node restarts from the top on resume, matching is index-based, and renaming a node breaks every thread already waiting. They are all the same constraint, that the saved state is a position inside your code. This system does it the other way: the gate ends its subgraph, the whole state goes back to the caller, and the answer arrives as a new run that routes on how far the work got. The resume becomes a router you can read, and the agent holds nothing between requests. The deeper difference is what each asks of you: one makes you write down what carrying on needs, the other lets you not think about it until a refund goes out twice.
 
 Part 6 split one graph into specialists. Two of them, `tool` and `delivery`, own jobs that involve money and customers, so both have to be able to stop and ask somebody.
 
@@ -39,15 +39,13 @@ What is worth knowing before you build a product on it is that the resume has ru
 - **You cannot wrap it in try/except,** because that swallows the exception the graph uses to unwind.
 - **Values must be JSON-serializable** to work across deployments.
 
-And the one that matters most over a product's life: adding and removing nodes and edges is safe for threads already in flight, but [renaming or removing a node is not](https://docs.langchain.com/oss/python/langgraph/backward-compatibility). Resume dispatches by the node name saved in the checkpoint. Rename `delivery_approval` and every reply currently waiting for a reviewer fails to resume.
+And the one that matters most over a product's life, [spelled out in the docs](https://docs.langchain.com/oss/python/langgraph/backward-compatibility): edges are free to change, because edge topology is not in the checkpoint at all, but renaming or removing a *node* that a thread is sitting at breaks it. Resume dispatches by the node name saved in the checkpoint, and a node that is gone has nowhere to resume from. Rename `delivery_approval` and every reply currently waiting for a reviewer fails.
 
 Read those together and a shape appears. They are all the same constraint: the saved state is a position inside your code, so your code has to hold still around it. For a graph that ships once, that is free. For a graph where the business asks for a new branch every sprint, you are agreeing to a deploy checklist nobody will remember, and the failure arrives as a customer reply that never went out.
 
-There is a second cost that is easy to miss. Graph state holds your own types, and getting them through a checkpoint means registering them with the serializer. The escape hatch when that gets tedious is `pickle_fallback`, which turns the checkpoint table into something you `pickle.loads` from. It is off by default and should stay off, and it is worth knowing it is the road the serializer problem pushes you down.
-
 ## Stopping without any of that
 
-The alternative is to end the run. A gate tells whoever is listening, marks how far the work got, and routes to a node that does nothing:
+The alternative is to end the run. The gate puts the proposal in front of whoever is watching, marks how far the work got, and routes to a node that does nothing but be the place the run stops:
 
 ```python
 async def tool_await(self, state: ToolState) -> ToolState:
@@ -73,7 +71,7 @@ class ToolRun(StrEnum):
     it, and anything past that is their answer.
     """
 
-    NONE = ""
+    NOT_STARTED = ""
     PENDING = "pending"
     APPROVED = "approved"
     CANCELLED = "cancelled"
@@ -101,7 +99,7 @@ Every run enters here, first or fifth. There is no resume mode and no flag sayin
 When the run ends, the whole state goes back to whoever asked:
 
 ```python
-await TopicFeed(self)(
+await self.feed(
     RunEndedMessage(
         payload=RunEndedPayload(
             thread_id=self.thread_id,
@@ -112,7 +110,7 @@ await TopicFeed(self)(
 )
 ```
 
-The backend stores that against the ticket and sends it back with the decision. The agent compiles its graph with no checkpointer and forgets everything.
+The backend stores that as a JSON column on a row keyed by the ticket and the audience, and sends it back with the decision. The agent compiles its graph with no checkpointer and forgets everything. That is the whole of the persistence: one table, one row per thread, a column you can read in a database client.
 
 ### What this buys
 
@@ -160,11 +158,21 @@ Rejection is recorded as an outcome rather than silently dropping everything, an
 
 ## So which should you use
 
-If every stop in your flow lands where the graph can cleanly end, end it. Hand the state back, route from an entry node, and the thread lives in one database, the agent holds nothing, the payload is readable in a log, and the graph is free to change.
+The usual way to put this is a capability question: can your stop land where the graph cleanly ends, or does it land mid-work? That is the wrong question, and I had it in an earlier draft of this post.
 
-If a stop lands in the middle of work you cannot redo, `interrupt()` is what exists for that, with the caveat that it does not resume mid-node either: the node restarts and your side effects run again. The question is not really "can I afford to redo this", it is "can I write down what a resume needs". If you cannot, that is worth knowing about the design before you hand the problem to a framework, because a checkpoint does not make the complexity go away. It moves it somewhere you cannot read.
+`interrupt()` does not resume mid-node either. The node restarts and your side effects run again. So "mid-work" is not a thing either option gives you; both make you deal with it, one of them quietly.
 
-I thought `tool_gate` was the hard case: after it the tool runs, the supervisor writes a report, another model call drafts an answer, and delivery can stop again at a different gate. But work following a stop is not the same as a stop inside work. Everything after that gate is reachable from an entry router with the state in hand, which is what the fifteen lines above do.
+The real difference is what each one asks of you before you ship.
+
+Ending the run forces the question up front: what would a later run need to carry this on? You have to answer it in the state, in types, where somebody else can read it. The pause becomes a final state, and a final state is just a starting state for the next run, so the resume is a path through the graph you can point at. You design the flow for being resumed, because you have no choice.
+
+`interrupt()` lets you skip that. You call a function in the middle of a node and the framework works the rest out, which feels like the mechanism doing the thinking for you. It is not: the node still re-runs from the top, side effects still repeat, index matching still bites. You simply did not have to think about it at the time, so you find out when a refund goes out twice.
+
+That is the trade, and it is not really about graphs. A framework that hides a hard question does not answer it. It moves it to the day you least want it, and leaves nothing written down in between.
+
+So: if a resume is worth being explicit about, and in anything handling money or customers it is, make it explicit. Write down what carrying on needs, put it in the state, and let the entry router read it. If the flow is small and will not change much, a script or an internal tool, `interrupt()` is less to write and you should use it.
+
+I thought `tool_gate` was the hard case: after it the tool runs, the supervisor writes a report, another model call drafts an answer, and delivery can stop again at a different gate. But work following a stop is not the same as a stop inside work. Everything after that gate is reachable from an entry router with the state in hand, which is what the entry router above does. Working that out took twenty minutes, and the twenty minutes was the point.
 
 ## What else it costs
 
