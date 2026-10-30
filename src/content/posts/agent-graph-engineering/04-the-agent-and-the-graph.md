@@ -244,7 +244,9 @@ The row that decides it is usually not line count. It is whether you ever need t
 
 **Your first state design will be wrong.** Mine was. You will discover that two nodes want to write the same field for different reasons, which is a reducer you did not know you needed, and the fix is a small rewrite rather than a patch.
 
-**`Command` versus conditional edges is a real fork in the road.** Returning `Command` from the node puts the routing next to the decision, which I prefer. Conditional edges put it in the graph definition, which keeps nodes ignorant of topology. There is one case where you do not get to choose, though: a parent has to route after a subgraph, because a subgraph cannot say where its parent goes next. There is a separate `route_after_tool` function in this codebase for exactly that reason, with a comment saying so.
+**`Command` versus conditional edges is a real fork in the road, and this codebase takes one side of it.** Returning `Command[Literal[...]]` from the node puts the routing next to the decision that drives it, and the `Literal` tells you a node's possible destinations from its signature. Conditional edges put the routing in the graph definition instead, which keeps nodes ignorant of topology; the cost is that the decision and the routing sit in different files, and the router is a function rather than a node, so it is absent from the exported diagram and from the trace.
+
+After trying both, every route here is a `Command` node and every edge is a plain `add_edge`. There are no `add_conditional_edges` left. That includes the case that looks like an exception: a parent has to route after a subgraph, because a subgraph cannot say where its parent goes next, but that means the *parent* decides, not that the decision has to be an edge. It is a node like any other, which [Part 6](/posts/agent-graph-engineering/subgraphs-multi-agent-system/) comes back to.
 
 **Typed outputs cost tokens and latency.** A structured output is a tool call under the hood, so you are paying for schema in the prompt and for a slightly more constrained generation. For routing decisions this is noise. For long prose it is worth checking.
 

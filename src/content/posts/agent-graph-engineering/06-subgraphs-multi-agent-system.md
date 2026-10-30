@@ -69,9 +69,15 @@ graph TD;
     support_escalate(support_escalate)
     support_report_tool(support_report_tool)
     support_respond(support_respond)
+    support_after_tool(support_after_tool)
+    support_done(support_done)
     finish([finish])
     start --> support_start;
+    delivery_done --> support_done;
     knowledge_done --> support_respond;
+    support_after_tool -.-> support_done;
+    support_after_tool -.-> support_report_tool;
+    support_after_tool -.-> support_respond;
     support_classify -.-> support_decide;
     support_decide -.-> knowledge_entry;
     support_decide -.-> support_escalate;
@@ -79,16 +85,14 @@ graph TD;
     support_decide -.-> tool_start;
     support_escalate -.-> delivery_start;
     support_report_tool -.-> support_respond;
-    support_respond -.-> finish;
     support_respond -.-> delivery_start;
+    support_respond -.-> support_done;
+    support_start -.-> delivery_start;
     support_start -.-> support_classify;
     support_start -.-> support_decide;
     support_start -.-> tool_start;
-    support_start -.-> delivery_start;
-    tool_done -.-> finish;
-    tool_done -.-> support_report_tool;
-    tool_done -.-> support_respond;
-    delivery_done --> finish;
+    tool_done --> support_after_tool;
+    support_done --> finish;
     subgraph knowledge
     knowledge_entry(start)
     knowledge_search(knowledge_search)
@@ -106,15 +110,15 @@ graph TD;
     tool_await(tool_await)
     tool_execute(tool_execute)
     tool_done(tool_done)
-    tool_start -.-> tool_plan;
-    tool_start -.-> tool_execute;
-    tool_start -.-> tool_done;
-    tool_plan -.-> tool_gate;
-    tool_plan -.-> tool_execute;
-    tool_plan -.-> tool_done;
-    tool_gate -.-> tool_await;
     tool_await --> tool_done;
     tool_execute --> tool_done;
+    tool_gate -.-> tool_await;
+    tool_plan -.-> tool_done;
+    tool_plan -.-> tool_execute;
+    tool_plan -.-> tool_gate;
+    tool_start -.-> tool_done;
+    tool_start -.-> tool_execute;
+    tool_start -.-> tool_plan;
     end
     subgraph delivery
     delivery_start(delivery_start)
@@ -123,22 +127,22 @@ graph TD;
     delivery_await(delivery_await)
     delivery_send(delivery_send)
     delivery_done(delivery_done)
-    delivery_start -.-> delivery_screen;
-    delivery_start -.-> delivery_send;
-    delivery_start -.-> delivery_done;
-    delivery_screen -.-> delivery_approval;
-    delivery_screen -.-> delivery_send;
-    delivery_screen -.-> delivery_done;
     delivery_approval -.-> delivery_await;
     delivery_await --> delivery_done;
+    delivery_screen -.-> delivery_approval;
+    delivery_screen -.-> delivery_done;
+    delivery_screen -.-> delivery_send;
     delivery_send --> delivery_done;
+    delivery_start -.-> delivery_done;
+    delivery_start -.-> delivery_screen;
+    delivery_start -.-> delivery_send;
     end
     classDef blocking stroke-width:3px,stroke-dasharray:4 3;
     class delivery_await blocking;
     class tool_await blocking;
 ```
 
-Three things to read off it. `knowledge` contains a loop, search to refine and back, which is a specialist retrying its own job without the supervisor knowing. Each subgraph has one way in and one way out, so an early exit lands on its own finish rather than reaching past it into the parent's. And the two nodes with a dashed border are the only places a run stops and waits for a person, a marking derived from each node's own source rather than from a list, because a hand-kept list of which nodes stop would go stale exactly here, in the picture most people look at instead of the code.
+Three things to read off it. `knowledge` contains a loop, search to refine and back, which is a specialist retrying its own job without the supervisor knowing. Each subgraph has one way in and one way out, so an early exit lands on its own finish rather than reaching past it into the parent's, and the parent has one too in `support_done`. And the two nodes with a dashed border are the only places a run stops and waits for a person, a marking derived from each node's own source rather than from a list, because a hand-kept list of which nodes stop would go stale exactly here, in the picture most people look at instead of the code.
 
 The second picture is a run of it:
 
@@ -161,22 +165,30 @@ What you lose by invoking inside a node is everything in the two pictures above.
 
 ## A supervisor routes, a specialist does not
 
-A subgraph cannot say where the parent goes next. [Part 4](/posts/agent-graph-engineering/the-agent-and-the-graph/) covered that fork in detail, `Command` versus conditional edges, and named this as the one case where you do not get to choose. It is worth restating here only because it is what the handoff column in that table gives up, and what this column is made of: a specialist that could redirect the parent would be a handoff with extra steps.
+A subgraph cannot say where the parent goes next. That is the handoff column's freedom, given up, and it is what this column is made of: a specialist that could redirect the parent would be a handoff with extra steps.
 
-So each subgraph ends, and the parent reads what came back:
+It is easy to read that as a constraint on *how* the parent routes, and it is not. The parent decides; the decision is an ordinary node like any other:
 
 ```python
-def route_after_tool(self, state: SupportState) -> str:
+async def support_after_tool(
+    self, state: SupportState
+) -> Command[Literal["support_report_tool", "support_respond", "support_done"]]:
+    """Where a run goes once the tool subgraph hands control back."""
     if state.tool_run is ToolRun.PENDING:
-        return "__end__"
-    return "support_report_tool" if state.tool else "support_respond"
+        return Command(goto="support_done")
+    # A planner finding no tool is not a tool call.
+    if state.tool:
+        return Command(goto="support_report_tool")
+    return Command(goto="support_respond")
 ```
+
+[Part 4](/posts/agent-graph-engineering/the-agent-and-the-graph/) worked through `Command` versus conditional edges and landed on this: every route here is a `Command` node, every edge is a plain `add_edge`, and the signature's `Literal` lists where a node can send a run. The handover after a subgraph looked like the one place that had to be an edge, and making it a node put it back on the diagram and gave it a span.
 
 Specialists are reusable *because* they are ignorant of who called them. This is the price.
 
 ## Where a run stops
 
-One line in `route_after_tool` above is doing something the rest of this post has not explained: `tool_run is PENDING` means the tool subgraph did not finish its job, it stopped to ask somebody. Both dashed nodes in the diagram are that.
+One line in `support_after_tool` above is doing something the rest of this post has not explained: `tool_run is PENDING` means the tool subgraph did not finish its job, it stopped to ask somebody. Both dashed nodes in the diagram are that.
 
 Giving a specialist the ability to wait for a human is a design problem of its own, with a real fork in it, and LangGraph has an answer, `interrupt()`, that is worth understanding before you decide against it. [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) is that post.
 
