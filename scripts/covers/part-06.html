@@ -10,22 +10,22 @@
 <body class="">
   <div>
     <div class="eyebrow">Agent Graph Engineering &middot; Part 6</div>
-    <h1>Subgraphs, Persistence, and Interrupts</h1>
-    <p class="kicker">Not three topics. One mechanism, seen from three sides.</p>
+    <h1>Subgraphs, and a Run That Stops for a Person</h1>
+    <p class="kicker">I shipped it on interrupts and a checkpointer, then tore both out.</p>
   </div>
 
   <div class="panel">
     <div class="nest">
       <div class="cap">the graph</div>
       <div class="inner">
-        <div class="cap">a subgraph, used as a node</div>
-        <div class="pause">&#9208;&nbsp; parked, waiting for a person</div>
+        <div class="cap">a subgraph, with its own start and finish</div>
+        <div class="pause">&#9208;&nbsp; stops at a node, and ends</div>
       </div>
-      <div class="foot">resumes twenty minutes later, on another socket</div>
+      <div class="foot">the whole state goes back to the caller</div>
     </div>
     <div class="stage" style="margin-top:44px">
-      <div class="stage-label">What makes it possible</div>
-      <div class="nodes"><span class="node on">the checkpoint</span></div>
+      <div class="stage-label">What carries the run on</div>
+      <div class="nodes"><span class="node on">the state you handed back</span></div>
     </div>
   </div>
 
