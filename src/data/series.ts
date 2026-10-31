@@ -36,7 +36,7 @@ export const SERIES_INFO: Record<string, SeriesInfo> = {
       { title: "The agent and the graph: a typed model call, and the flow that routes it", slug: "the-agent-and-the-graph" },
       { title: "Tools and guardrails: what the model may do, and what it may say", slug: "tools-and-guardrails" },
       { title: "Subgraphs: the multi-agent system you can see", slug: "subgraphs-multi-agent-system" },
-      { title: "A run that stops for a person: interrupt(), and what replaces it", slug: "a-run-that-stops-for-a-person" },
+      { title: "Human in the loop, not in the graph: interrupt(), and what replaces it", slug: "a-run-that-stops-for-a-person" },
       { title: "Why a WebSocket, and how progress streams from anywhere in the graph", slug: "why-a-websocket" },
       { title: "Practices for both sides: the business service and the agent service", slug: "practices-for-both-services" },
       { title: "Observability: tracing a run, seeing the graph, and what it cost", slug: "tracing-a-run" },

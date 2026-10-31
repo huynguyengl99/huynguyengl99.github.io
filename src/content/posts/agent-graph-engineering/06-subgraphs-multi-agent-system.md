@@ -107,12 +107,10 @@ graph TD;
     tool_start(tool_start)
     tool_plan(tool_plan)
     tool_gate(tool_gate)
-    tool_await(tool_await)
     tool_execute(tool_execute)
     tool_done(tool_done)
-    tool_await --> tool_done;
     tool_execute --> tool_done;
-    tool_gate -.-> tool_await;
+    tool_gate -.-> tool_done;
     tool_plan -.-> tool_done;
     tool_plan -.-> tool_execute;
     tool_plan -.-> tool_gate;
@@ -124,11 +122,9 @@ graph TD;
     delivery_start(delivery_start)
     delivery_screen(delivery_screen)
     delivery_approval(delivery_approval)
-    delivery_await(delivery_await)
     delivery_send(delivery_send)
     delivery_done(delivery_done)
-    delivery_approval -.-> delivery_await;
-    delivery_await --> delivery_done;
+    delivery_approval -.-> delivery_done;
     delivery_screen -.-> delivery_approval;
     delivery_screen -.-> delivery_done;
     delivery_screen -.-> delivery_send;
@@ -137,12 +133,9 @@ graph TD;
     delivery_start -.-> delivery_screen;
     delivery_start -.-> delivery_send;
     end
-    classDef blocking stroke-width:3px,stroke-dasharray:4 3;
-    class delivery_await blocking;
-    class tool_await blocking;
 ```
 
-Three things to read off it. `knowledge` contains a loop, search to refine and back, which is a specialist retrying its own job without the supervisor knowing. Each subgraph has one way in and one way out, so an early exit lands on its own finish rather than reaching past it into the parent's, and the parent has one too in `support_done`. And the two nodes with a dashed border are the only places a run stops and waits for a person, a marking derived from each node's own source rather than from a list, because a hand-kept list of which nodes stop would go stale exactly here, in the picture most people look at instead of the code.
+Three things to read off it. `knowledge` contains a loop, search to refine and back, which is a specialist retrying its own job without the supervisor knowing. Each subgraph has one way in and one way out, so an early exit lands on its own finish rather than reaching past it into the parent's, and the parent has one too in `support_done`. And nothing on it says where a run stops for a person, which is the design rather than an omission. `tool_gate` and `delivery_approval` put a proposal in front of somebody and route to their own graph's exit, the same one a run that finished the job leaves by. A stop is a status the run ends with, not a place it sits in the picture, and the next post is about why.
 
 The second picture is a run of it:
 
@@ -150,7 +143,7 @@ The second picture is a run of it:
 
 Every node is a span, nested under the run, with where it routed and what it decided recorded beside it. The supervisor picking a specialist is one line, the specialist's own planning is the next, and each model call sits under the node that made it. Nobody wrote logging for any of that; it falls out of each step being a node.
 
-The last row is where this run stopped and waited for somebody, which is part 7's subject.
+This is the run that stopped for a person, and nothing in it is a pause. `tool_gate` marked `tool_run pending` and the run carried on through both exits and ended. Where it stopped is in the status, which is part 7's subject.
 
 ## Which of the two ways to compose one
 
@@ -188,7 +181,7 @@ Specialists are reusable *because* they are ignorant of who called them. This is
 
 ## Where a run stops
 
-One line in `support_after_tool` above is doing something the rest of this post has not explained: `tool_run is PENDING` means the tool subgraph did not finish its job, it stopped to ask somebody. Both dashed nodes in the diagram are that.
+One line in `support_after_tool` above is doing something the rest of this post has not explained: `tool_run is PENDING` means the tool subgraph did not finish its job, it stopped to ask somebody. The subgraph ended the way every run of it ends, through `tool_done`, and that status is the only thing that says which kind of ending it was.
 
 Giving a specialist the ability to wait for a human is a design problem of its own, with a real fork in it, and LangGraph has an answer, `interrupt()`, that is worth understanding before you decide against it. [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) is that post.
 

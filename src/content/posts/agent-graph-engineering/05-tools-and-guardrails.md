@@ -124,7 +124,7 @@ The codebase says this plainly, and says how it knows:
 
 > A process killed mid-refund refunds again when the work comes back. The state the backend holds is the one the run started from, so a redelivered decision re-enters the graph and reaches the refund node a second time. Verified, not assumed.
 
-The fix is a ledger. Before an irreversible call, claim it. After it returns, record it. The key is the run plus the node, which is stable across the retry, so the same logical execution gets the same key even after a restart, and it lives in the agent's own Postgres so the claim survives the process that made it.
+The fix is a ledger. Before an irreversible call, claim it. After it returns, record it. The key is the run's own id plus the tool: a redelivered decision carries that id back, so the second attempt claims the first one's row, and a question asked later is a new run with a new id and runs normally. It lives in the agent's own Postgres, so the claim survives the process that made it. [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) has what makes a key like that right, and the plausible one that is not.
 
 That quote is worth a note, because it changed. It used to blame LangGraph checkpointing after a node returns, which was true of the design then. [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) replaced that design and the sentence had to be rewritten, and the ledger did not: the retry arrives by a different road and lands in the same place. Which is the useful thing to notice. A guard worth having does not depend on which mechanism brings the second attempt.
 
