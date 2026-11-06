@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./cover.css">
+</head>
+<body class="long">
+  <div>
+    <div class="eyebrow">Agent Graph Engineering &middot; Part 8</div>
+    <h1>Why a WebSocket, and How Progress Streams</h1>
+    <p class="kicker">A node deep in a subgraph emits by calling one function. It never sees a socket.</p>
+  </div>
+
+  <div class="panel">
+    <div class="stage-label">One user message, many small events</div>
+    <div class="flow">
+      <div class="step">a node calls <b>emit()</b></div>
+      <div class="tick">&darr;</div>
+      <div class="step on">appended to Postgres first</div>
+      <div class="tick">&darr;</div>
+      <div class="step">published to whoever is listening</div>
+      <div class="tick">&darr;</div>
+      <div class="step">a reconnecting client asks from its cursor</div>
+    </div>
+    <div class="foot" style="margin-top:34px;font-size:21px;color:var(--muted-foreground)">A broadcast reaches whoever is there at the time. The log is what makes it durable.</div>
+  </div>
+
+  <div class="byline">by <b>Huy Nguyen</b> &middot; huynguyengl99.github.io</div>
+</body>
+</html>
