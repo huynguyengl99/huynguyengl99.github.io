@@ -208,7 +208,7 @@ def execution_key(run_id: str, tool: str) -> str | None:
     return f"{run_id}:{tool}" if run_id else None
 ```
 
-Stable across a redelivery, different for a new question, and the same id the tracer files spans under, so the ledger row and the trace are the same run. The honest limit: if the process dies between claiming and recording, nobody knows whether the call went through, so that is reported rather than guessed and a person checks.
+Stable across a redelivery, different for a new question, and the same id the tracer files spans under, so the ledger row and the trace are the same run. The honest limit: if the process dies between claiming and recording, or the call times out or gets a 5xx, nobody knows whether it went through, so that is reported rather than guessed and a person checks.
 
 ## So which should you use
 

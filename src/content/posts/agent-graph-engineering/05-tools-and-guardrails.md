@@ -130,7 +130,9 @@ That quote is worth a note, because it changed. It used to blame LangGraph check
 
 And then the part that makes it trustworthy:
 
-> The honest limit: if the process dies between claiming and recording, nobody knows whether the call went through. That is reported rather than guessed, so a person checks. Retrying risks a second refund and skipping risks none at all.
+> The honest limit: if the process dies between claiming and recording, or the call fails in a way that may have reached the other side (a timeout, a 5xx), nobody knows whether it went through. The claim is kept and the outcome is reported rather than guessed, so a person checks. Retrying risks a second refund and skipping risks none at all.
+
+The middle clause was added late, and it is the easy one to miss. A crash is obviously unknown. A timeout looks like a failure, so the first version treated it like a refusal, freed the key and let the retry run. But a timeout means you stopped waiting, not that the other side did nothing. The refund may have gone through after you gave up. So a failure now says whether it may have acted. A refusal raised before anything went out frees the key. A timeout or a 5xx keeps the claim and reports the outcome as unknown.
 
 There is no clever answer to that window. You cannot make a remote side effect and a local record atomic without the remote side cooperating, which most payment APIs do via an idempotency key and some do not. What you _can_ do is refuse to guess. A system that reports "I do not know whether this happened" is dramatically better than one that picks a default and is sometimes wrong about money.
 
