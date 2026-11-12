@@ -13,6 +13,10 @@ series: "Agent Graph Engineering"
 seriesOrder: 0
 ---
 
+<iframe src="https://www.youtube-nocookie.com/embed/94NYoGT-jWU" title="I built AI agents before they had a name. Here's what was missing" style="width:100%;aspect-ratio:16/9;border:0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
+*Prefer watching? This part is also a 7-minute video on my channel, [The Tabby Dev](https://www.youtube.com/@TheTabbyDev), and the whole series is in [one playlist](https://www.youtube.com/playlist?list=PLeB6nhraTiLY).*
+
 > **TL;DR** Building a chatbot is easy. Building an AI system you can trace, test, and change without fear is not. I spent years shipping LLM features as intent detection plus nested `if/else`, and no amount of observability tooling fixed it, because the problem was that the flow only existed in code, in my head, and in a stale diagram. The fix was to stop writing the flow as control flow and start declaring it as a graph. This post is the story of how I got there, years before the practice had a name, and why I think graphs are a durable answer rather than a trend. If you only want the stack and the arguments to bring to your team, skip to [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/).
 
 Building an AI assistant today is easy. A few lines of code, an API key, and you have something that chats. Add a couple of tool definitions and you have an agent. Done, right?
