@@ -15,6 +15,8 @@ seriesOrder: 2
 
 > **TL;DR** Put your product's domain in one service and your agent graph in another, and draw the line at state ownership rather than at anything that sounds like a layer. The agent owns execution state, the backend owns the record, and which of them *stores* a half-finished run is a separate question that [part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) answers differently from this post. Updates travel one way, agent to backend, over a generated WebSocket client. The payoff is not tidiness, it is that a node is a function you can call with a state you invented, while the same decision inside a socket consumer needs a connection and a user before it will run at all.
 
+Put your agent in its own service and you can call it from a test, with a state you made up, without a socket or a logged-in user.
+
 [Part 1](/posts/agent-graph-engineering/the-stack-and-why-each-piece-is-there/) listed the stack and said, in one line, to keep business logic out of the agent. That line does a lot of work and deserves its own post, because it is the decision that is nearly free this month and expensive in a year, and because "split it into two services" is useless advice until somebody tells you where the cut goes.
 
 ## Table of contents

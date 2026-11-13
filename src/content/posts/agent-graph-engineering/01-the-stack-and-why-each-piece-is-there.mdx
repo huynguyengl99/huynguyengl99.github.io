@@ -19,6 +19,8 @@ import SeriesMap from "@/components/SeriesMap.astro";
 
 > **TL;DR** The stack is Python, Pydantic AI for agents, LangGraph for the flow, [chanx](https://github.com/huynguyengl99/chanx) for typed streaming WebSockets and a generated frontend contract, OpenTelemetry into a trace store you own, pytest with a mocked LLM for fast tests, and real-model evals for regressions. Business logic stays in a separate service from the agent graph. The single idea holding it together: every boundary in the system is a declared, typed artifact rather than something you hold in your head. This post makes the case for each piece so you can bring it to your team, then lays out what we build in the rest of the series.
 
+If the only way to understand your AI system is to read its code, every new engineer has to rebuild it in their head. This post is the stack that stops that, and the case for each piece.
+
 [Part 0](/posts/agent-graph-engineering/before-it-had-a-name/) was the story: years of shipping LLM features as intent detection plus nested conditionals, and why observability tooling never fixed the underlying problem. This post is the pragmatic half.
 
 > One clarification first, because the word is overloaded. This series is about the _execution_ graph of an agent: state, nodes, edges, routing, stopping for a person, carrying on afterwards. It is not graph RAG, and not knowledge graphs. Those are retrieval techniques, where a graph is the data you query. Graph RAG could sit behind one node here as one tool among several. Same word, different concept, and that collision is a large part of why there is so little material on this subject.
