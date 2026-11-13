@@ -169,6 +169,6 @@ The agent must stay internal. The approval gate lives inside the graph, so anyth
 
 It does not drive the run. If the run is a task in whichever web process took the request, the socket's lifetime and the run's tangle together, and a deploy ends both. Here the request puts a job on a queue and returns, a worker drives the run, and the socket is only how the two services talk while it happens. The case for that split gets its own space in the part on shipping.
 
-Next is the practices post: concrete patterns on both sides of the boundary, the Django service and the agent service, which is the one most likely to be useful if you are adapting this rather than reading it. Hope this one helps, particularly the append-before-publish part, which is the one I would build before any of the others.
+Next is [the practices post](/posts/agent-graph-engineering/practices-for-both-services/): concrete patterns on both sides of the boundary, the Django service and the agent service, which is the one most likely to be useful if you are adapting this rather than reading it. Hope this one helps, particularly the append-before-publish part, which is the one I would build before any of the others.
 
 I write these deep-dives and maintain a handful of Python libraries, so if that is your kind of thing, follow along on [GitHub](https://github.com/huynguyengl99) and [LinkedIn](https://www.linkedin.com/in/huynguyengl99/).
