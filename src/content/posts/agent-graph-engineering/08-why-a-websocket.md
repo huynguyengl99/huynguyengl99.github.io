@@ -63,7 +63,7 @@ For completeness, polling and a queue. Polling turns a token stream into a slide
 
 Disclosure first: I wrote chanx. I wrote it because I kept rebuilding these same pieces on every project that needed a socket.
 
-It runs on Django Channels and on FastAPI with the same API, and this repo uses it on both. Here is what it does for this system.
+It runs on Django Channels and on FastAPI with the same API, and this repo uses it on both. The wire protocol is shared with chanx-js and chanx-go, which is why the browser's TypeScript client talks to a Python server with no adapter in between. Here is what it does for this system.
 
 Messages are typed. Every message is a Pydantic model with an `action` literal, and that literal is what the framework dispatches on:
 
@@ -78,7 +78,7 @@ class ChatTokenMessage(BaseMessage):
     replayable: ClassVar[bool] = False
 ```
 
-A handler is a method decorated with `@ws_handler`, and its argument's type says which message it handles. A frame that does not validate is rejected before it reaches your handler.
+A handler is a method decorated with `@ws_handler`, and its argument's type says which message it handles. A frame that does not validate never reaches your handler, and the sender gets a structured error back.
 
 Topics make one connection carry many subscriptions. A topic is a class with an address pattern and an authorization check:
 
@@ -112,15 +112,17 @@ Put the two next to each other and the difference is clear. Plain SSE gives you 
 
 | | Plain SSE plus POST | WebSocket with chanx |
 | --- | --- | --- |
-| Message shapes | `data:` strings you parse, validated if you remember to | Pydantic models, validated on arrival, both directions |
+| Message shapes | `data:` strings you parse, validated if you remember to | Pydantic models, validated on arrival both ways; a bad frame gets a structured error back |
 | Contract | OpenAPI for the actions; event shapes only since 3.2, with little codegen | One AsyncAPI document for both directions, generated Python and TypeScript clients |
 | Watching many things | One stream each, six per origin on HTTP/1.1, or your own filtering | Topics, many on one socket |
 | Who may see what | Checked per stream, or per event on a shared stream | `authorize()` once, when a connection joins a topic |
 | Publishing from a worker | Your own pub/sub to whichever process holds the stream | `Topic.broadcast` from anywhere, through the channel layer |
-| Tying a reply to its request | The POST answers on one connection, the events arrive on another | `ref` on the envelope |
+| Tying a reply to its request | The POST answers on one connection, the events arrive on another | The client's `request()` returns the typed reply, matched by `ref` |
 | Catching up after a drop | `Last-Event-ID`, built in | `seq` on the envelope; the event log is needed either way |
-| Reconnecting | `EventSource` does it | The JS client does it, with a heartbeat, and resubscribes its topics |
+| Reconnecting | `EventSource` does it | Backoff and a heartbeat, and every topic resubscribes, authorized again, so a permission revoked while offline takes effect |
+| A token stream in React | A state update per token, unless you batch it yourself | `on` handlers that skip component state, optionally batched once per animation frame, still in order |
 | Auth | A cookie or a token in the URL, since `EventSource` sends no headers | DRF permission classes at the handshake |
+| Testing | A test client that reads the stream, and parsing it yourself | Test communicators for Django and FastAPI, which this repo's broadcast and replay tests use |
 
 Most rows on the left are something you would end up building. Topics, per-subscription auth, cross-process fan-out and request correlation are each a small project, and on a socket without a library you would build them anyway. That is the case for chanx specifically, not only for WebSockets. A bare WebSocket is a pipe too.
 
