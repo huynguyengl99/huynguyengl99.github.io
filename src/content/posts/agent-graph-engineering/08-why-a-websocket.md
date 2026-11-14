@@ -14,7 +14,7 @@ series: "Agent Graph Engineering"
 seriesOrder: 8
 ---
 
-> **TL;DR** Start with Server-Sent Events. If you are streaming one answer into one page, SSE is simpler and you should use it. This system outgrew it on the browser side, where a support rep watches several tickets, acts on them, and needs to see some events the customer must not, all over one authenticated connection. Both hops use [chanx](https://github.com/huynguyengl99/chanx) for typed messages and topics, and both are described by AsyncAPI, so the backend's Python client and the browser's TypeScript client are generated. A node emits a typed message by calling one function and never sees a socket. Pydantic AI produces the deltas and LangGraph runs the nodes, but neither one does the delivery. The part that is easy to get wrong is the reply nobody was listening for. A broadcast only reaches whoever is subscribed at that moment, so every event that matters goes into a numbered log first, and a new connection starts by asking what it missed.
+> **TL;DR** Server-Sent Events is the natural first pick, and for streaming one answer into one page it is enough. A system like this one, where a support rep watches several tickets, acts on them, and sees events the customer must not, is better served by a WebSocket with chanx: typed messages both ways, topics authorized when a connection joins, broadcast from any process, and one generated contract instead of an OpenAPI half and an undocumented stream. Both hops use [chanx](https://github.com/huynguyengl99/chanx) for typed messages and topics, and both are described by AsyncAPI, so the backend's Python client and the browser's TypeScript client are generated. A node emits a typed message by calling one function and never sees a socket. Pydantic AI produces the deltas and LangGraph runs the nodes, but neither one does the delivery. The part that is easy to get wrong is the reply nobody was listening for. A broadcast only reaches whoever is subscribed at that moment, so every event that matters goes into a numbered log first, and a new connection starts by asking what it missed.
 
 [Part 7](/posts/agent-graph-engineering/a-run-that-stops-for-a-person/) left a run stopped, waiting for a human. This post is about how anyone found out it was waiting, and how everything else a run says reaches a browser while it says it.
 
@@ -105,6 +105,26 @@ Auth reuses what the REST API already has. The browser socket authenticates with
 class HubAuthenticator(DjangoAuthenticator):
     permission_classes = [IsAuthenticated]
 ```
+
+## chanx against plain SSE, side by side
+
+Put the two next to each other and the difference is clear. Plain SSE gives you a pipe and leaves the rest to you. chanx gives you the pieces this kind of system needs anyway, already built.
+
+| | Plain SSE plus POST | WebSocket with chanx |
+| --- | --- | --- |
+| Message shapes | `data:` strings you parse, validated if you remember to | Pydantic models, validated on arrival, both directions |
+| Contract | OpenAPI for the actions; event shapes only since 3.2, with little codegen | One AsyncAPI document for both directions, generated Python and TypeScript clients |
+| Watching many things | One stream each, six per origin on HTTP/1.1, or your own filtering | Topics, many on one socket |
+| Who may see what | Checked per stream, or per event on a shared stream | `authorize()` once, when a connection joins a topic |
+| Publishing from a worker | Your own pub/sub to whichever process holds the stream | `Topic.broadcast` from anywhere, through the channel layer |
+| Tying a reply to its request | The POST answers on one connection, the events arrive on another | `ref` on the envelope |
+| Catching up after a drop | `Last-Event-ID`, built in | `seq` on the envelope; the event log is needed either way |
+| Reconnecting | `EventSource` does it | The JS client does it, with a heartbeat, and resubscribes its topics |
+| Auth | A cookie or a token in the URL, since `EventSource` sends no headers | DRF permission classes at the handshake |
+
+Most rows on the left are something you would end up building. Topics, per-subscription auth, cross-process fan-out and request correlation are each a small project, and on a socket without a library you would build them anyway. That is the case for chanx specifically, not only for WebSockets. A bare WebSocket is a pipe too.
+
+Plain SSE still wins in places, and I would rather say so. It is ordinary HTTP, so every proxy, load balancer and logging tool already understands it. A single-process app needs no channel layer. And when the traffic really is one answer flowing one way, the extra structure buys nothing. If that describes your product, start there. Move when you see the left column turning into code you maintain.
 
 ## What AsyncAPI does
 
